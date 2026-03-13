@@ -1,0 +1,6 @@
+@MaffContaby.Api_HostAddress = http://localhost:5165
+
+GET {{MaffContaby.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

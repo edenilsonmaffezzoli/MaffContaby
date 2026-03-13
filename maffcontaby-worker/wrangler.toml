@@ -1,0 +1,8 @@
+name = "maffcontaby-worker"
+main = "src/index.ts"
+compatibility_date = "2026-03-13"
+send_metrics = false
+
+kv_namespaces = [
+  { binding = "MAFF_KV", id = "REPLACE_ME", preview_id = "REPLACE_ME" }
+]

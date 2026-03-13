@@ -1,0 +1,14 @@
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/.wrangler/
+**/*.local
+
+**/.env
+**/.env.*
+
+**/bin/
+**/obj/
+
+**/.DS_Store
+**/.idea/
