@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using MaffContaby.Api.Data;
@@ -314,78 +315,256 @@ api.MapGet("/export/contabilidade", async (AppDbContext db) =>
         return sanitized;
     }
 
+    static bool TryParseCompetencia(string text, out DateOnly competencia)
+    {
+        competencia = default;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        var monthMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["jan"] = 1,
+            ["fev"] = 2,
+            ["mar"] = 3,
+            ["abr"] = 4,
+            ["mai"] = 5,
+            ["jun"] = 6,
+            ["jul"] = 7,
+            ["ago"] = 8,
+            ["set"] = 9,
+            ["out"] = 10,
+            ["nov"] = 11,
+            ["dez"] = 12,
+        };
+
+        var value = text.Trim();
+        var parts = value.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2) return false;
+
+        var monthText = parts[0].Trim().TrimEnd('.');
+        if (!monthMap.TryGetValue(monthText, out var month)) return false;
+
+        if (!int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var year)) return false;
+        if (year < 100) year += 2000;
+
+        competencia = new DateOnly(year, month, 1);
+        return true;
+    }
+
+    static bool TryReadCompetencia(IXLCell cell, out DateOnly competencia)
+    {
+        competencia = default;
+        if (cell.IsEmpty()) return false;
+
+        if (cell.DataType == XLDataType.DateTime)
+        {
+            var dt = cell.GetDateTime();
+            competencia = new DateOnly(dt.Year, dt.Month, 1);
+            return true;
+        }
+
+        var text = cell.GetFormattedString().Trim();
+        return TryParseCompetencia(text, out competencia);
+    }
+
+    static string BuildEntryKey(DateOnly competencia, string grupo)
+    {
+        return $"{competencia:yyyy-MM}|{grupo.Trim().ToLowerInvariant()}";
+    }
+
     var people = await db.People.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
     var entries = await db.Entries.AsNoTracking().OrderBy(x => x.Competencia).ThenBy(x => x.Grupo).ToListAsync();
     var assets = await db.Assets.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
 
-    using var workbook = new XLWorkbook();
+    var templatePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Contabilidade.xlsx"));
+    using var workbook = File.Exists(templatePath) ? new XLWorkbook(templatePath) : new XLWorkbook();
+
+    IXLWorksheet? templatePersonSheet = null;
+    foreach (var ws in workbook.Worksheets)
+    {
+        if (string.Equals(ws.Name, "Finanças", StringComparison.OrdinalIgnoreCase)) continue;
+        templatePersonSheet = ws;
+        break;
+    }
 
     foreach (var person in people)
     {
-        var ws = workbook.Worksheets.Add(SanitizeSheetName(person.Name));
-
-        ws.Cell(1, 1).Value = "Competência";
-        ws.Cell(1, 2).Value = "Grupo";
-        ws.Cell(1, 3).Value = "Valor";
-        ws.Cell(1, 4).Value = "Observação";
-        ws.Cell(1, 5).Value = "Data";
-
-        var row = 2;
-        foreach (var e in entries.Where(x => x.PersonId == person.Id))
+        var sheetName = SanitizeSheetName(person.Name);
+        var ws = workbook.Worksheets.FirstOrDefault(x => string.Equals(x.Name, sheetName, StringComparison.OrdinalIgnoreCase));
+        if (ws is null)
         {
-            ws.Cell(row, 1).Value = e.Competencia.ToDateTime(new TimeOnly(0, 0));
-            ws.Cell(row, 2).Value = e.Grupo;
-            ws.Cell(row, 3).Value = e.Valor;
-            ws.Cell(row, 4).Value = e.Observacao;
-            ws.Cell(row, 5).Value = e.Data?.ToDateTime(new TimeOnly(0, 0));
-            row++;
+            if (templatePersonSheet is not null)
+            {
+                ws = templatePersonSheet.CopyTo(sheetName);
+            }
+            else
+            {
+                ws = workbook.Worksheets.Add(sheetName);
+            }
         }
 
-        var lastRow = Math.Max(2, row - 1);
-        var range = ws.Range(1, 1, lastRow, 5);
-        range.CreateTable();
-        ws.SheetView.FreezeRows(1);
+        var lastRow = ws.LastRowUsed(XLCellsUsedOptions.AllContents)?.RowNumber() ?? 0;
+        if (lastRow == 0) lastRow = 1;
 
-        ws.Column(1).Style.DateFormat.Format = "mm/yyyy";
-        ws.Column(3).Style.NumberFormat.Format = "\"R$\" #,##0.00";
-        ws.Column(5).Style.DateFormat.Format = "dd/mm/yyyy";
+        var hasRowCompetencia = false;
+        for (var rowNumber = 1; rowNumber <= lastRow; rowNumber++)
+        {
+            var cell = ws.Row(rowNumber).Cell(1);
+            if (!TryReadCompetencia(cell, out _)) continue;
+            hasRowCompetencia = true;
+            break;
+        }
 
-        ws.Columns().AdjustToContents();
+        var personEntries = entries.Where(x => x.PersonId == person.Id).ToList();
+        var values = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        foreach (var e in personEntries)
+        {
+            var key = BuildEntryKey(e.Competencia, e.Grupo);
+            if (values.TryGetValue(key, out var existing))
+            {
+                values[key] = existing + e.Valor;
+            }
+            else
+            {
+                values[key] = e.Valor;
+            }
+        }
+
+        if (hasRowCompetencia)
+        {
+            DateOnly? current = null;
+            for (var rowNumber = 1; rowNumber <= lastRow; rowNumber++)
+            {
+                var row = ws.Row(rowNumber);
+                var labelCell = row.Cell(1);
+
+                if (TryReadCompetencia(labelCell, out var parsedCompetencia))
+                {
+                    current = parsedCompetencia;
+                    continue;
+                }
+
+                if (!current.HasValue) continue;
+                var label = labelCell.GetFormattedString().Trim();
+                if (string.IsNullOrWhiteSpace(label)) continue;
+                if (string.Equals(label, "Total", StringComparison.OrdinalIgnoreCase)) continue;
+
+                var sum = 0m;
+                if (values.TryGetValue(BuildEntryKey(current.Value, label), out var v))
+                {
+                    sum = v;
+                }
+
+                var lastCol = row.LastCellUsed(XLCellsUsedOptions.AllContents)?.Address.ColumnNumber ?? 0;
+                if (lastCol < 2) lastCol = 2;
+                for (var colNumber = 2; colNumber <= lastCol; colNumber++)
+                {
+                    row.Cell(colNumber).Clear(XLClearOptions.Contents);
+                }
+
+                if (sum != 0m)
+                {
+                    row.Cell(2).Value = sum;
+                }
+            }
+        }
+        else
+        {
+            var headerRow = ws.Row(1);
+            var lastCol = headerRow.LastCellUsed(XLCellsUsedOptions.AllContents)?.Address.ColumnNumber ?? 0;
+            if (lastCol < 2) lastCol = 2;
+
+            var colCompetencias = new Dictionary<int, DateOnly>();
+            for (var colNumber = 2; colNumber <= lastCol; colNumber++)
+            {
+                var header = headerRow.Cell(colNumber).GetFormattedString().Trim();
+                if (!TryParseCompetencia(header, out var comp)) continue;
+                colCompetencias[colNumber] = comp;
+            }
+
+            var neededCompetencias = personEntries.Select(e => e.Competencia).Distinct().OrderBy(x => x).ToList();
+            foreach (var comp in neededCompetencias)
+            {
+                if (colCompetencias.Values.Contains(comp)) continue;
+                ws.Column(lastCol).InsertColumnsAfter(1);
+                var newCol = lastCol + 1;
+                ws.Column(newCol).Width = ws.Column(lastCol).Width;
+                ws.Range(1, lastCol, lastRow, lastCol).CopyTo(ws.Range(1, newCol, lastRow, newCol));
+
+                var ptBr = CultureInfo.GetCultureInfo("pt-BR");
+                var month = ptBr.DateTimeFormat.GetAbbreviatedMonthName(comp.Month).ToLowerInvariant().TrimEnd('.');
+                ws.Cell(1, newCol).Value = $"{month}/{comp:yy}";
+                colCompetencias[newCol] = comp;
+                lastCol = newCol;
+            }
+
+            var lastDataRow = ws.LastRowUsed(XLCellsUsedOptions.AllContents)?.RowNumber() ?? 1;
+            for (var rowNumber = 2; rowNumber <= lastDataRow; rowNumber++)
+            {
+                var row = ws.Row(rowNumber);
+                var label = row.Cell(1).GetFormattedString().Trim();
+                if (string.IsNullOrWhiteSpace(label)) continue;
+                if (string.Equals(label, "Total", StringComparison.OrdinalIgnoreCase)) continue;
+
+                foreach (var kvp in colCompetencias)
+                {
+                    row.Cell(kvp.Key).Clear(XLClearOptions.Contents);
+                    if (values.TryGetValue(BuildEntryKey(kvp.Value, label), out var v) && v != 0m)
+                    {
+                        row.Cell(kvp.Key).Value = v;
+                    }
+                }
+            }
+        }
     }
 
-    var finWs = workbook.Worksheets.Add("Finanças");
-    finWs.Cell(1, 1).Value = "Item";
-    finWs.Cell(1, 2).Value = "Saldo";
-    finWs.Cell(1, 3).Value = "Disponível imediatamente";
-    finWs.Cell(1, 4).Value = "Data base";
-    finWs.Cell(1, 5).Value = "Observação";
+    var finSheet = workbook.Worksheets.FirstOrDefault(x => string.Equals(x.Name, "Finanças", StringComparison.OrdinalIgnoreCase))
+                   ?? workbook.Worksheets.Add("Finanças");
+    var finLastRow = finSheet.LastRowUsed(XLCellsUsedOptions.AllContents)?.RowNumber() ?? 0;
+    if (finLastRow == 0) finLastRow = 1;
 
-    var finRow = 2;
-    foreach (var a in assets)
+    var finRowsByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+    var somasRow = 0;
+    for (var rowNumber = 1; rowNumber <= finLastRow; rowNumber++)
     {
-        finWs.Cell(finRow, 1).Value = a.Name;
-        finWs.Cell(finRow, 2).Value = a.Saldo;
-        finWs.Cell(finRow, 3).Value = a.DisponivelImediatamente;
-        finWs.Cell(finRow, 4).Value = a.AsOfDate?.ToDateTime(new TimeOnly(0, 0));
-        finWs.Cell(finRow, 5).Value = a.Observacao;
-        finRow++;
+        var name = finSheet.Row(rowNumber).Cell(1).GetString().Trim();
+        if (string.IsNullOrWhiteSpace(name)) continue;
+        if (string.Equals(name, "SOMAS:", StringComparison.OrdinalIgnoreCase))
+        {
+            somasRow = rowNumber;
+            break;
+        }
+        if (string.Equals(name, "Total", StringComparison.OrdinalIgnoreCase)) continue;
+        finRowsByName[name] = rowNumber;
     }
 
-    var finLast = Math.Max(2, finRow - 1);
-    finWs.Range(1, 1, finLast, 5).CreateTable();
-    finWs.SheetView.FreezeRows(1);
-    finWs.Column(2).Style.NumberFormat.Format = "\"R$\" #,##0.00";
-    finWs.Column(4).Style.DateFormat.Format = "dd/mm/yyyy";
+    var insertRowBefore = somasRow > 0 ? somasRow : finLastRow + 1;
+    foreach (var asset in assets)
+    {
+        if (!finRowsByName.TryGetValue(asset.Name, out var rowNumber))
+        {
+            finSheet.Row(insertRowBefore).InsertRowsAbove(1);
+            var newRow = insertRowBefore;
+            if (newRow > 1) finSheet.Row(newRow - 1).CopyTo(finSheet.Row(newRow));
+            finSheet.Row(newRow).Cell(1).Value = asset.Name;
+            finRowsByName[asset.Name] = newRow;
+            insertRowBefore++;
+        }
+    }
 
-    var totalsRow = finLast + 2;
-    finWs.Cell(totalsRow, 1).Value = "Totais";
-    finWs.Cell(totalsRow, 2).FormulaA1 = $"SUM(B2:B{finLast})";
-    finWs.Cell(totalsRow, 3).Value = "Total disponível imediatamente";
-    finWs.Cell(totalsRow, 4).FormulaA1 = $"SUMIF(C2:C{finLast},TRUE,B2:B{finLast})";
-    finWs.Range(totalsRow, 1, totalsRow, 4).Style.Font.SetBold();
-    finWs.Cell(totalsRow, 2).Style.NumberFormat.Format = "\"R$\" #,##0.00";
-    finWs.Cell(totalsRow, 4).Style.NumberFormat.Format = "\"R$\" #,##0.00";
-    finWs.Columns().AdjustToContents();
+    foreach (var kvp in finRowsByName)
+    {
+        var row = finSheet.Row(kvp.Value);
+        row.Cell(2).Clear(XLClearOptions.Contents);
+    }
+
+    foreach (var asset in assets)
+    {
+        var row = finSheet.Row(finRowsByName[asset.Name]);
+        row.Cell(2).Value = asset.Saldo;
+        if (!row.Cell(3).IsEmpty()) row.Cell(3).Value = asset.DisponivelImediatamente;
+        if (!row.Cell(4).IsEmpty()) row.Cell(4).Value = asset.AsOfDate?.ToDateTime(new TimeOnly(0, 0));
+        if (!row.Cell(5).IsEmpty()) row.Cell(5).Value = asset.Observacao;
+    }
 
     await using var ms = new MemoryStream();
     workbook.SaveAs(ms);
