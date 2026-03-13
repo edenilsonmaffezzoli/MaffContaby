@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 
 function MenuIcon(props: { className?: string }) {
   return (
     <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 6h16M4 12h16M4 18h7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -35,7 +35,7 @@ function WalletIcon(props: { className?: string }) {
         strokeWidth="2"
         strokeLinejoin="round"
       />
-      <circle cx="17" cy="13" r="1.5" fill="currentColor" />
+      <path d="M16 13h4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -43,44 +43,15 @@ function WalletIcon(props: { className?: string }) {
 function UploadIcon(props: { className?: string }) {
   return (
     <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       <path d="M7 8l5-5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path
-        d="M3 15v3a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-3"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function LogoMark() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="32" cy="32" r="28" stroke="rgba(255,255,255,0.9)" strokeWidth="3.5" />
-      <path d="M18 46V36" stroke="#4CAF50" strokeWidth="4" strokeLinecap="round" />
-      <path d="M32 46V26" stroke="#4CAF50" strokeWidth="4" strokeLinecap="round" />
-      <path d="M46 46V18" stroke="#4CAF50" strokeWidth="4" strokeLinecap="round" />
-      <path d="M15 48H49" stroke="rgba(255,255,255,0.9)" strokeWidth="3.5" strokeLinecap="round" />
+      <path d="M4 21h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
 
 export function Layout() {
   const [isOpen, setIsOpen] = useState(false);
-  const [isKeyOpen, setIsKeyOpen] = useState(false);
-  const [writeKey, setWriteKey] = useState(() => localStorage.getItem('maff_write_key') ?? '');
-
-  const envKey = ((import.meta.env.VITE_WRITE_KEY as string | undefined) ?? '').trim();
-  const effectiveKey = (writeKey.trim() || envKey).trim();
-  const hasWriteKey = Boolean(effectiveKey);
-
-  const keyBadge = useMemo(() => {
-    if (writeKey.trim()) return 'Chave: definida';
-    if (envKey) return 'Chave: via env';
-    return 'Chave: necessária';
-  }, [envKey, writeKey]);
 
   return (
     <div className="shell">
@@ -90,25 +61,28 @@ export function Layout() {
         aria-label={isOpen ? 'Fechar menu' : 'Abrir menu'}
         onClick={() => setIsOpen(x => !x)}
       >
-        {isOpen ? <CloseIcon className="icon-20" /> : <MenuIcon className="icon-20" />}
+        {isOpen ? <CloseIcon className="icon-24" /> : <MenuIcon className="icon-24" />}
       </button>
 
       {isOpen ? <div className="sidebar-overlay" role="presentation" onClick={() => setIsOpen(false)} /> : null}
 
-      <aside className={isOpen ? 'sidebar sidebar--open' : 'sidebar'} aria-label="Navegação principal">
+      <aside className={isOpen ? 'sidebar sidebar--open' : 'sidebar'} aria-label="Navegação">
         <div className="sidebar__inner">
           <div className="sidebar__brand">
-            <div className="sidebar__brandmark">
-              <LogoMark />
-            </div>
+            <span className="sidebar__brandmark" aria-hidden="true">
+              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="14" cy="14" r="13" stroke="currentColor" strokeWidth="2" opacity="0.9" />
+                <path d="M9 18.5V15.5M13 18.5V12.5M17 18.5V10.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M8.8 19.2H19.2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
+              </svg>
+            </span>
             <div className="sidebar__brandtext">
               <div className="sidebar__brandname">MaffContaby</div>
               <div className="sidebar__brandsub">Gestão Contábil</div>
             </div>
           </div>
 
-          <nav className="sidebar__nav" aria-label="Menu principal">
-            <div className="sidebar__section-label">Menu</div>
+          <nav className="sidebar__nav">
             <NavLink
               to="/"
               end
@@ -139,97 +113,15 @@ export function Layout() {
           <div className="sidebar__footer">
             <div>© 2026 MaffContaby</div>
             <div>Versão Web</div>
-            <div className="sidebar__footer-actions">
-              <button
-                className={hasWriteKey ? 'sidebar__keybtn sidebar__keybtn--ok' : 'sidebar__keybtn'}
-                type="button"
-                onClick={() => setIsKeyOpen(true)}
-              >
-                {keyBadge}
-              </button>
-            </div>
           </div>
         </div>
       </aside>
 
       <main className="shell__main">
-        <div className="topbar">
-          <span className="topbar__title">MaffContaby</span>
-          <button
-            className={hasWriteKey ? 'topbar__keybtn topbar__keybtn--ok' : 'topbar__keybtn'}
-            type="button"
-            onClick={() => setIsKeyOpen(true)}
-          >
-            {keyBadge}
-          </button>
-        </div>
         <div className="container">
           <Outlet />
         </div>
       </main>
-
-      {isKeyOpen ? (
-        <div className="modal-overlay" role="presentation" onClick={() => setIsKeyOpen(false)}>
-          <div
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Definir chave de escrita"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="modal__header">
-              <div className="modal__title">Chave de escrita</div>
-              <button className="button button--ghost button--sm" type="button" onClick={() => setIsKeyOpen(false)}>
-                Fechar
-              </button>
-            </div>
-
-            <div className="modal__body">
-              <div className="muted" style={{ marginBottom: 12 }}>
-                Necessária para operações de salvar/importar/excluir. A chave fica salva apenas neste navegador.
-              </div>
-
-              <div className="field">
-                <label className="label">Chave</label>
-                <input
-                  className="input"
-                  type="password"
-                  value={writeKey}
-                  onChange={e => setWriteKey(e.target.value)}
-                  placeholder={envKey ? 'Definida via env (opcional)' : 'Digite a chave'}
-                />
-              </div>
-
-              <div className="modal__actions">
-                <button
-                  className="button button--primary"
-                  type="button"
-                  onClick={() => {
-                    const v = writeKey.trim();
-                    if (v) localStorage.setItem('maff_write_key', v);
-                    if (!v) localStorage.removeItem('maff_write_key');
-                    setWriteKey(v);
-                    setIsKeyOpen(false);
-                  }}
-                >
-                  Salvar
-                </button>
-                <button
-                  className="button button--danger"
-                  type="button"
-                  onClick={() => {
-                    localStorage.removeItem('maff_write_key');
-                    setWriteKey('');
-                    setIsKeyOpen(false);
-                  }}
-                >
-                  Limpar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

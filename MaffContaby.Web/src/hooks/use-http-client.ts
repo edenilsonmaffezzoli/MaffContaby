@@ -19,6 +19,14 @@ export function useHttpClient() {
       let key = localStorage.getItem('maff_write_key')?.trim() ?? '';
       if (!key && envKey) key = envKey;
 
+      if (!key) {
+        const input = window.prompt('Chave para salvar dados (apenas você e sua esposa):')?.trim();
+        if (input) {
+          key = input;
+          localStorage.setItem('maff_write_key', input);
+        }
+      }
+
       if (key) {
         config.headers = config.headers ?? {};
         (config.headers as Record<string, string>)['x-maff-key'] = key;
