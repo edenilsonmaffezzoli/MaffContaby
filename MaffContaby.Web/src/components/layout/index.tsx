@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 
 function MenuIcon(props: { className?: string }) {
@@ -69,6 +69,18 @@ function LogoMark() {
 
 export function Layout() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isKeyOpen, setIsKeyOpen] = useState(false);
+  const [writeKey, setWriteKey] = useState(() => localStorage.getItem('maff_write_key') ?? '');
+
+  const envKey = ((import.meta.env.VITE_WRITE_KEY as string | undefined) ?? '').trim();
+  const effectiveKey = (writeKey.trim() || envKey).trim();
+  const hasWriteKey = Boolean(effectiveKey);
+
+  const keyBadge = useMemo(() => {
+    if (writeKey.trim()) return 'Chave: definida';
+    if (envKey) return 'Chave: via env';
+    return 'Chave: necessária';
+  }, [envKey, writeKey]);
 
   return (
     <div className="shell">
@@ -127,6 +139,15 @@ export function Layout() {
           <div className="sidebar__footer">
             <div>© 2026 MaffContaby</div>
             <div>Versão Web</div>
+            <div className="sidebar__footer-actions">
+              <button
+                className={hasWriteKey ? 'sidebar__keybtn sidebar__keybtn--ok' : 'sidebar__keybtn'}
+                type="button"
+                onClick={() => setIsKeyOpen(true)}
+              >
+                {keyBadge}
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -134,11 +155,81 @@ export function Layout() {
       <main className="shell__main">
         <div className="topbar">
           <span className="topbar__title">MaffContaby</span>
+          <button
+            className={hasWriteKey ? 'topbar__keybtn topbar__keybtn--ok' : 'topbar__keybtn'}
+            type="button"
+            onClick={() => setIsKeyOpen(true)}
+          >
+            {keyBadge}
+          </button>
         </div>
         <div className="container">
           <Outlet />
         </div>
       </main>
+
+      {isKeyOpen ? (
+        <div className="modal-overlay" role="presentation" onClick={() => setIsKeyOpen(false)}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Definir chave de escrita"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="modal__header">
+              <div className="modal__title">Chave de escrita</div>
+              <button className="button button--ghost button--sm" type="button" onClick={() => setIsKeyOpen(false)}>
+                Fechar
+              </button>
+            </div>
+
+            <div className="modal__body">
+              <div className="muted" style={{ marginBottom: 12 }}>
+                Necessária para operações de salvar/importar/excluir. A chave fica salva apenas neste navegador.
+              </div>
+
+              <div className="field">
+                <label className="label">Chave</label>
+                <input
+                  className="input"
+                  type="password"
+                  value={writeKey}
+                  onChange={e => setWriteKey(e.target.value)}
+                  placeholder={envKey ? 'Definida via env (opcional)' : 'Digite a chave'}
+                />
+              </div>
+
+              <div className="modal__actions">
+                <button
+                  className="button button--primary"
+                  type="button"
+                  onClick={() => {
+                    const v = writeKey.trim();
+                    if (v) localStorage.setItem('maff_write_key', v);
+                    if (!v) localStorage.removeItem('maff_write_key');
+                    setWriteKey(v);
+                    setIsKeyOpen(false);
+                  }}
+                >
+                  Salvar
+                </button>
+                <button
+                  className="button button--danger"
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem('maff_write_key');
+                    setWriteKey('');
+                    setIsKeyOpen(false);
+                  }}
+                >
+                  Limpar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
