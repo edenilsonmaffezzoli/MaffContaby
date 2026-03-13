@@ -27,10 +27,15 @@ jobs:
         working-directory: maffcontaby-worker
         run: npm ci
 
+      - name: Wrangler auth check
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != '' }}
+        working-directory: maffcontaby-worker
+        run: npx wrangler whoami
+
       - name: Deploy
         if: ${{ env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != '' }}
         working-directory: maffcontaby-worker
-        run: npx wrangler deploy
+        run: npx wrangler deploy --log-level debug
 
       - name: Deploy skipped
         if: ${{ env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == '' }}
