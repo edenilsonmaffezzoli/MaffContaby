@@ -390,17 +390,6 @@ function tryParseIsoDate(value: string | null | undefined) {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
-function tryParseCompetenciaToDate(value: string | null | undefined) {
-  const v = value?.trim();
-  if (!v) return null;
-  const match = /^(\d{4})-(\d{2})/.exec(v);
-  if (!match) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
-  return new Date(Date.UTC(year, month - 1, 1));
-}
-
 function setCellFormat(ws: XLSX.WorkSheet, r1: number, c1: number, z: string) {
   const addr = XLSX.utils.encode_cell({ r: r1 - 1, c: c1 - 1 });
   const cell = ws[addr] as XLSX.CellObject | undefined;
@@ -450,6 +439,17 @@ function addAutoFilter(ws: XLSX.WorkSheet, endRow1: number, endCol1: number) {
   };
 }
 
+function formatCompetenciaLabel(competencia: string) {
+  const match = /^(\d{4})-(\d{2})/.exec(competencia.trim());
+  if (!match) return competencia;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return competencia;
+
+  const monthText = (Object.keys(monthMap) as Array<keyof typeof monthMap>).find(k => monthMap[k] === month) ?? 'jan';
+  return `${monthText}/${pad2(year % 100)}`;
+}
+
 function snapshotToWorkbook(snapshot: DbSnapshotV1) {
   const wb = XLSX.utils.book_new();
 
@@ -483,27 +483,54 @@ function snapshotToWorkbook(snapshot: DbSnapshotV1) {
   }
 
   for (const person of people) {
-    const rows: Array<Array<unknown>> = [['Competência', 'Grupo', 'Valor', 'Observação', 'Data']];
-    for (const e of entries) {
-      if (e.personId !== person.id) continue;
-      rows.push([
-        tryParseCompetenciaToDate(e.competencia),
-        e.grupo,
-        e.valor,
-        e.observacao ?? '',
-        tryParseIsoDate(e.data),
-      ]);
+    const personEntries = entries.filter(e => e.personId === person.id);
+
+    const competencias = Array.from(new Set(personEntries.map(e => e.competencia))).sort((a, b) => a.localeCompare(b));
+    const grupos = Array.from(new Set(personEntries.map(e => e.grupo.trim()))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+    const sumByGrupoCompetencia = new Map<string, number>();
+    for (const e of personEntries) {
+      const key = `${e.grupo.trim()}\u0000${e.competencia}`;
+      sumByGrupoCompetencia.set(key, (sumByGrupoCompetencia.get(key) ?? 0) + e.valor);
     }
 
-    const ws = XLSX.utils.aoa_to_sheet(rows, { cellDates: true });
-    ws['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 12 }, { wch: 28 }, { wch: 12 }];
-    const lastRow = Math.max(1, rows.length);
-    addAutoFilter(ws, lastRow, 5);
+    const headerRow: Array<unknown> = ['', ...competencias.map(formatCompetenciaLabel)];
+    const rows: Array<Array<unknown>> = [headerRow];
 
-    for (let r = 2; r <= lastRow; r++) {
-      setCellFormat(ws, r, 1, 'mm/yyyy');
-      setCellFormat(ws, r, 3, '"R$" #,##0.00');
-      setCellFormat(ws, r, 5, 'dd/mm/yyyy');
+    for (const g of grupos) {
+      const row: Array<unknown> = [g];
+      for (const c of competencias) {
+        const v = sumByGrupoCompetencia.get(`${g}\u0000${c}`) ?? 0;
+        row.push(v === 0 ? '' : v);
+      }
+      rows.push(row);
+    }
+
+    const totalRowIndex1 = rows.length + 1;
+    rows.push(['Total', ...competencias.map(() => '')]);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows, { cellDates: true });
+    ws['!cols'] = [{ wch: 22 }, ...competencias.map(() => ({ wch: 12 }))];
+
+    const endRow1 = Math.max(1, rows.length);
+    const endCol1 = Math.max(1, headerRow.length);
+    addAutoFilter(ws, endRow1 - 1, endCol1);
+
+    const firstDataRow1 = 2;
+    const lastDataRow1 = firstDataRow1 + Math.max(0, grupos.length) - 1;
+    for (let r = firstDataRow1; r <= totalRowIndex1; r++) {
+      for (let c1 = 2; c1 <= endCol1; c1++) {
+        setCellFormat(ws, r, c1, '"R$" #,##0.00');
+      }
+    }
+
+    if (grupos.length > 0) {
+      for (let i = 0; i < competencias.length; i++) {
+        const c0 = 1 + i;
+        const col = XLSX.utils.encode_col(c0);
+        const addr = XLSX.utils.encode_cell({ r: totalRowIndex1 - 1, c: c0 });
+        ws[addr] = { t: 'n', f: `SUM(${col}${firstDataRow1}:${col}${lastDataRow1})` } as XLSX.CellObject;
+      }
     }
 
     XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(person.name));
