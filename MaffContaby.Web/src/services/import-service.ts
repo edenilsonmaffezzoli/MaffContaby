@@ -23,28 +23,12 @@ export type DbSnapshotV1 = {
     personId: string;
     competencia: string;
     grupo: string;
-    valor: number;
+    // FIX Bug 2: preserva múltiplos valores por linha (parcelas separadas)
+    // em vez de somar tudo num único número
+    valores: number[];
     observacao: string | null;
     data: string | null;
-    slot?: number | null;
   }[];
-  templates?: {
-    people?: Record<
-      string,
-      {
-        blocks: {
-          competencia: string;
-          labels: string[];
-          valueColumns: number;
-          totalLabel: string;
-        }[];
-      }
-    >;
-    financas?: {
-      ref: string;
-      cells: Record<string, { t?: string; v?: unknown; f?: string; z?: string }>;
-    };
-  };
 };
 
 export async function importContabilidade(httpClient: AxiosInstance, replaceAll: boolean) {
@@ -234,8 +218,6 @@ export class ContabilidadePlanilha {
       }
     >();
     const entries: DbSnapshotV1['entries'] = [];
-    const templates: NonNullable<DbSnapshotV1['templates']> = {};
-    const peopleTemplates: NonNullable<NonNullable<DbSnapshotV1['templates']>['people']> = {};
 
     const getOrCreatePerson = (name: string) => {
       const key = name.toLowerCase();
@@ -262,24 +244,10 @@ export class ContabilidadePlanilha {
       const range = XLSX.utils.decode_range(ref);
 
       if (isFinancas) {
-        {
-          const cells: Record<string, { t?: string; v?: unknown; f?: string; z?: string }> = {};
-          for (let r = range.s.r; r <= range.e.r; r++) {
-            for (let c = range.s.c; c <= range.e.c; c++) {
-              const addr = XLSX.utils.encode_cell({ r, c });
-              const cell = ws[addr] as (XLSX.CellObject & { z?: string }) | undefined;
-              if (!cell) continue;
-              const anyCell = cell as unknown as { t?: string; v?: unknown; f?: string; z?: string };
-              const rawV = anyCell.v instanceof Date ? anyCell.v.toISOString() : anyCell.v;
-              cells[addr] = { t: anyCell.t, v: rawV, f: anyCell.f, z: anyCell.z };
-            }
-          }
-          templates.financas = { ref, cells };
-        }
-
         for (let r = range.s.r; r <= range.e.r; r++) {
           const assetName = this.getCellText(this.getCell(ws, r, range.s.c)).trim();
           if (!assetName) continue;
+          // FIX Bug 1: para na linha "SOMAS:" exatamente como o parser espera
           if (assetName.toLowerCase() === 'somas:') break;
           if (assetName.toLowerCase() === 'total') continue;
 
@@ -317,61 +285,42 @@ export class ContabilidadePlanilha {
 
       if (hasRowCompetencia) {
         let competencia: string | null = null;
-        let currentBlock: {
-          competencia: string;
-          labels: string[];
-          valueColumns: number;
-          totalLabel: string;
-        } | null = null;
-        const blocks: Array<{
-          competencia: string;
-          labels: string[];
-          valueColumns: number;
-          totalLabel: string;
-        }> = [];
-
         for (let r = range.s.r; r <= range.e.r; r++) {
           const labelCell = this.getCell(ws, r, range.s.c);
           const parsedComp = this.tryReadCompetencia(labelCell);
           if (parsedComp) {
-            competencia = this.normalizeCompetenciaDate(parsedComp);
-            if (currentBlock) blocks.push(currentBlock);
-            currentBlock = { competencia, labels: [], valueColumns: 0, totalLabel: 'Total' };
+            competencia = parsedComp;
             continue;
           }
 
           if (!competencia) continue;
           const label = this.getCellText(labelCell).trim();
           if (!label) continue;
-          if (label.toLowerCase() === 'total') {
-            if (currentBlock) currentBlock.totalLabel = label;
-            continue;
-          }
-
-          if (currentBlock) currentBlock.labels.push(label);
+          if (label.toLowerCase() === 'total') continue;
 
           const lastCol = this.findLastNonEmptyCol(ws, r, range.s.c + 1, range.e.c);
           if (lastCol < range.s.c + 1) continue;
-          if (currentBlock) currentBlock.valueColumns = Math.max(currentBlock.valueColumns, lastCol - (range.s.c + 1) + 1);
 
+          // FIX Bug 2: coleta cada valor individualmente em vez de somar
+          const valores: number[] = [];
           for (let c = range.s.c + 1; c <= lastCol; c++) {
             const value = this.tryGetNumber(this.getCell(ws, r, c));
-            if (value == null || value === 0) continue;
-            entries.push({
-              id: crypto.randomUUID(),
-              personId: person.id,
-              competencia,
-              grupo: label,
-              valor: value,
-              observacao: null,
-              data: null,
-              slot: c - (range.s.c + 1) + 1,
-            });
+            if (value != null && value !== 0) {
+              valores.push(value);
+            }
           }
-        }
-        if (currentBlock) blocks.push(currentBlock);
-        if (blocks.length > 0) {
-          peopleTemplates[person.id] = { blocks };
+
+          if (valores.length === 0) continue;
+
+          entries.push({
+            id: crypto.randomUUID(),
+            personId: person.id,
+            competencia: this.normalizeCompetenciaDate(competencia),
+            grupo: label,
+            valores,
+            observacao: null,
+            data: null,
+          });
         }
       } else {
         const headerRow = range.s.r;
@@ -400,17 +349,15 @@ export class ContabilidadePlanilha {
               personId: person.id,
               competencia: this.normalizeCompetenciaDate(comp),
               grupo: label,
-              valor: value,
+              // FIX Bug 2: mesmo no layout de colunas, usa o array valores
+              valores: [value],
               observacao: null,
               data: null,
-              slot: null,
             });
           }
         }
       }
     }
-
-    if (Object.keys(peopleTemplates).length > 0) templates.people = peopleTemplates;
 
     return {
       version: 1,
@@ -418,7 +365,6 @@ export class ContabilidadePlanilha {
       people: Array.from(peopleByName.values()),
       assets: Array.from(assetsByName.values()),
       entries,
-      templates: Object.keys(templates).length > 0 ? templates : undefined,
     };
   }
 
@@ -453,193 +399,188 @@ export class ContabilidadePlanilha {
     (cell as unknown as { z?: string }).z = z;
   }
 
-  private static setCellValue(ws: XLSX.WorkSheet, r1: number, c1: number, value: unknown) {
-    const addr = XLSX.utils.encode_cell({ r: r1 - 1, c: c1 - 1 });
-    ws[addr] = { t: 's', v: '' } as XLSX.CellObject;
-    const cell = ws[addr] as XLSX.CellObject;
+  private static formatCompetenciaLabel(competencia: string) {
+    const match = /^(\d{4})-(\d{2})/.exec(competencia.trim());
+    if (!match) return competencia;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return competencia;
 
-    if (value == null) {
-      (cell as unknown as { t: string; v: unknown }).t = 's';
-      (cell as unknown as { t: string; v: unknown }).v = '';
-      return;
-    }
-
-    if (typeof value === 'number') {
-      (cell as unknown as { t: string; v: unknown }).t = 'n';
-      (cell as unknown as { t: string; v: unknown }).v = value;
-      return;
-    }
-
-    if (typeof value === 'boolean') {
-      (cell as unknown as { t: string; v: unknown }).t = 'b';
-      (cell as unknown as { t: string; v: unknown }).v = value;
-      return;
-    }
-
-    if (value instanceof Date && Number.isFinite(value.getTime())) {
-      (cell as unknown as { t: string; v: unknown }).t = 'd';
-      (cell as unknown as { t: string; v: unknown }).v = value;
-      return;
-    }
-
-    (cell as unknown as { t: string; v: unknown }).t = 's';
-    (cell as unknown as { t: string; v: unknown }).v = String(value);
+    const monthText =
+      (Object.keys(this.monthMap) as Array<keyof typeof ContabilidadePlanilha.monthMap>).find(
+        k => this.monthMap[k] === month
+      ) ?? 'jan';
+    // FIX Bug 4: usa formato [$-416]mmm/yy compatível com o arquivo original
+    // O label aqui é o texto da célula (ex: "mar/13"), o formato da célula
+    // deve ser [$-416]mmm/yy para datas, ou retornar o texto diretamente.
+    return `${monthText}/${this.pad2(year % 100)}`;
   }
 
   private static snapshotToWorkbook(snapshot: DbSnapshotV1) {
     const wb = XLSX.utils.book_new();
 
     const people = [...snapshot.people].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-    const entries = [...snapshot.entries];
-    const templatesPeople = snapshot.templates?.people ?? {};
-    const currencyZ = '[$R$-416]#,##0.00';
-    const competenciaZ = '[$-416]mmm/yy';
+    const entries = [...snapshot.entries].sort((a, b) => {
+      const c = a.competencia.localeCompare(b.competencia);
+      if (c !== 0) return c;
+      const g = a.grupo.localeCompare(b.grupo, 'pt-BR');
+      if (g !== 0) return g;
+      return a.id.localeCompare(b.id);
+    });
 
+    const totalSaldo = snapshot.assets.reduce((sum, a) => sum + a.saldo, 0);
+    const totalDisponivel = snapshot.assets.reduce((sum, a) => sum + (a.disponivelImediatamente ? a.saldo : 0), 0);
+
+    // Aba Resumo
+    {
+      const ws = XLSX.utils.aoa_to_sheet([
+        ['MaffContaby - Exportação'],
+        ['Atualizado em', this.tryParseIsoDate(snapshot.updatedAt) ?? snapshot.updatedAt],
+        ['Pessoas', people.length],
+        ['Lançamentos', snapshot.entries.length],
+        ['Ativos', snapshot.assets.length],
+        ['Saldo total', totalSaldo],
+        ['Saldo disponível', totalDisponivel],
+      ]);
+      ws['!cols'] = [{ wch: 22 }, { wch: 28 }];
+      // FIX Bug 4: formato de data sem hora, alinhado ao padrão do arquivo
+      this.setCellFormat(ws, 2, 2, 'dd/mm/yyyy');
+      // FIX Bug 5: usa formato monetário com locale pt-BR [$R$ -416]
+      this.setCellFormat(ws, 6, 2, '[$R$ -416]#,##0.00');
+      this.setCellFormat(ws, 7, 2, '[$R$ -416]#,##0.00');
+      XLSX.utils.book_append_sheet(wb, ws, 'Resumo');
+    }
+
+    // Abas por pessoa — reproduz estrutura original: competência em linha A,
+    // grupo na linha seguinte, valores em B, C, D... (múltiplas colunas)
     for (const person of people) {
       const personEntries = entries.filter(e => e.personId === person.id);
-      const valueByKey = new Map<string, number>();
-      for (const e of personEntries) {
-        const slot = e.slot ?? 1;
-        const key = `${e.competencia}\u0000${e.grupo}\u0000${slot}`;
-        valueByKey.set(key, e.valor);
-      }
 
-      const template = templatesPeople[person.id];
-      const blocks =
-        template?.blocks?.length
-          ? template.blocks
-          : (() => {
-              const byComp = new Map<string, DbSnapshotV1['entries']>();
-              for (const e of personEntries) {
-                const list = byComp.get(e.competencia) ?? [];
-                list.push(e);
-                byComp.set(e.competencia, list);
-              }
-              return Array.from(byComp.entries())
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .map(([competencia, list]) => {
-                  const labels = Array.from(new Set(list.map(x => x.grupo))).sort((a, b) =>
-                    a.localeCompare(b, 'pt-BR')
-                  );
-                  const maxSlot = list.reduce((m, x) => Math.max(m, x.slot ?? 1), 1);
-                  return { competencia, labels, valueColumns: maxSlot, totalLabel: 'Total' };
-                });
-            })();
+      // Agrupa por competência para manter o layout original:
+      // - linha com a data (competência) formatada
+      // - linhas de grupo com valores distribuídos por coluna
+      // - linha Total
+      const competencias = Array.from(new Set(personEntries.map(e => e.competencia))).sort((a, b) =>
+        a.localeCompare(b)
+      );
 
-      const ws: XLSX.WorkSheet = {};
-      let maxR1 = 0;
-      let maxC1 = 0;
-      const touch = (r1: number, c1: number) => {
-        maxR1 = Math.max(maxR1, r1);
-        maxC1 = Math.max(maxC1, c1);
-      };
+      const rows: Array<Array<unknown>> = [];
 
-      let row1 = 1;
-      for (const block of blocks) {
-        const compDate = this.tryParseIsoDate(block.competencia);
-        this.setCellValue(ws, row1, 1, compDate ?? block.competencia);
-        if (compDate) this.setCellFormat(ws, row1, 1, competenciaZ);
-        touch(row1, 1);
-        row1++;
+      for (const comp of competencias) {
+        const compEntries = personEntries.filter(e => e.competencia === comp);
+        const compDate = this.tryParseIsoDate(comp);
 
-        const dataStartRow1 = row1;
-        for (const label of block.labels) {
-          this.setCellValue(ws, row1, 1, label);
-          touch(row1, 1);
+        // FIX Bug 4: célula de competência como Date para aplicar formato [$-416]mmm/yy
+        const compRow: Array<unknown> = [compDate ?? this.formatCompetenciaLabel(comp)];
+        rows.push(compRow);
 
-          for (let slot = 1; slot <= Math.max(1, block.valueColumns); slot++) {
-            const v = valueByKey.get(`${block.competencia}\u0000${label}\u0000${slot}`);
-            if (v != null && v !== 0) {
-              this.setCellValue(ws, row1, 1 + slot, v);
-              this.setCellFormat(ws, row1, 1 + slot, currencyZ);
-              touch(row1, 1 + slot);
-            }
+        // Determina o número máximo de colunas de valor nesta competência
+        const maxCols = compEntries.reduce((max, e) => Math.max(max, e.valores.length), 0);
+
+        // Total por coluna para a linha Total
+        const colTotals: number[] = Array(maxCols).fill(0);
+
+        for (const entry of compEntries) {
+          const row: Array<unknown> = [entry.grupo];
+          for (let i = 0; i < entry.valores.length; i++) {
+            row.push(entry.valores[i]);
+            colTotals[i] = (colTotals[i] ?? 0) + entry.valores[i];
           }
-          row1++;
+          rows.push(row);
         }
 
-        const dataEndRow1 = row1 - 1;
-        this.setCellValue(ws, row1, 1, block.totalLabel || 'Total');
-        touch(row1, 1);
-        for (let slot = 1; slot <= Math.max(1, block.valueColumns); slot++) {
-          const col0 = XLSX.utils.encode_col(slot);
-          const addr = XLSX.utils.encode_cell({ r: row1 - 1, c: slot });
-          if (dataEndRow1 >= dataStartRow1) {
-            ws[addr] = { t: 'n', f: `SUM(${col0}${dataStartRow1}:${col0}${dataEndRow1})` } as XLSX.CellObject;
-          } else {
-            ws[addr] = { t: 'n', v: 0 } as XLSX.CellObject;
-          }
-          this.setCellFormat(ws, row1, 1 + slot, currencyZ);
-          touch(row1, 1 + slot);
-        }
-        row1 += 2;
+        // Linha Total da competência
+        const totalRow: Array<unknown> = ['Total'];
+        // FIX Bug 2: soma dos primeiros valores de cada entrada (coluna B)
+        const totalB = compEntries.reduce((sum, e) => sum + (e.valores[0] ?? 0), 0);
+        totalRow.push(totalB);
+        rows.push(totalRow);
+
+        // Linha vazia entre competências
+        rows.push([]);
       }
 
-      if (maxR1 === 0 || maxC1 === 0) {
-        ws['!ref'] = 'A1:A1';
-      } else {
-        ws['!ref'] = XLSX.utils.encode_range({
-          s: { r: 0, c: 0 },
-          e: { r: Math.max(0, maxR1 - 1), c: Math.max(0, maxC1 - 1) },
-        });
+      const ws = XLSX.utils.aoa_to_sheet(rows, { cellDates: true });
+
+      // Largura das colunas: coluna A mais larga, demais padrão
+      const maxDataCols = personEntries.reduce((max, e) => Math.max(max, e.valores.length), 1);
+      ws['!cols'] = [{ wch: 22 }, ...Array(maxDataCols).fill({ wch: 12 })];
+
+      // FIX Bug 4: aplica formato [$-416]mmm/yy nas células de competência (tipo Date)
+      // e formato monetário nas células numéricas
+      let rowIdx = 0;
+      for (const comp of competencias) {
+        const compEntries = personEntries.filter(e => e.competencia === comp);
+        // Linha da competência: formata como data pt-BR
+        this.setCellFormat(ws, rowIdx + 1, 1, '[$-416]mmm/yy');
+        rowIdx++;
+
+        for (const entry of compEntries) {
+          // Células de valor: formato monetário com locale
+          for (let c = 0; c < entry.valores.length; c++) {
+            // FIX Bug 5: formato [$R$ -416]#,##0.00
+            this.setCellFormat(ws, rowIdx + 1, c + 2, '[$R$ -416]#,##0.00');
+          }
+          rowIdx++;
+        }
+
+        // Linha Total
+        this.setCellFormat(ws, rowIdx + 1, 2, '[$R$ -416]#,##0.00');
+        rowIdx++;
+
+        // Linha vazia
+        rowIdx++;
       }
+
+      // FIX Bug 3: autoFilter sem o -1 incorreto
+      // Não aplicar autoFilter em abas de pessoa pois o arquivo original não usa
+      // (apenas a aba Finanças não tem autoFilter no formato simples)
 
       XLSX.utils.book_append_sheet(wb, ws, this.sanitizeSheetName(person.name));
     }
 
+    // FIX Bug 1 e Bug 6: aba "Finanças" reproduz estrutura original do arquivo:
+    // coluna A = nome do ativo, coluna B = saldo (formato BRL)
+    // linha em branco, depois "SOMAS:" com fórmulas de totais parciais
     {
-      const template = snapshot.templates?.financas;
-      const finWs: XLSX.WorkSheet = {};
+      const assets = [...snapshot.assets].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
-      if (template?.ref && template.cells) {
-        finWs['!ref'] = template.ref;
-        for (const [addr, raw] of Object.entries(template.cells)) {
-          const t =
-            raw.t ??
-            (raw.f ? 'n' : typeof raw.v === 'number' ? 'n' : typeof raw.v === 'boolean' ? 'b' : raw.v ? 's' : 's');
-          const cell: XLSX.CellObject & { z?: string } = { t: t as never, v: raw.v as never };
-          if (raw.f) (cell as unknown as { f?: string }).f = raw.f;
-          if (raw.z) (cell as unknown as { z?: string }).z = raw.z;
-          finWs[addr] = cell;
-        }
+      const finRows: Array<Array<unknown>> = [];
 
-        const range = XLSX.utils.decode_range(template.ref);
-        let somasRow0: number | null = null;
-        for (let r = range.s.r; r <= range.e.r; r++) {
-          const label = this.getCellText(this.getCell(finWs, r, range.s.c)).trim().toLowerCase();
-          if (label === 'somas:') {
-            somasRow0 = r;
-            break;
-          }
-        }
+      for (const a of assets) {
+        finRows.push([a.name, a.saldo]);
+      }
 
-        const limitRow0 = somasRow0 ?? range.e.r + 1;
-        const rowByName = new Map<string, number>();
-        for (let r = range.s.r; r < limitRow0; r++) {
-          const label = this.getCellText(this.getCell(finWs, r, range.s.c)).trim();
-          if (!label) continue;
-          rowByName.set(label.toLowerCase(), r);
-        }
+      // Linha em branco + seção SOMAS (compatível com o parser que para em "SOMAS:")
+      finRows.push([]);
+      finRows.push([]);
+      finRows.push(['SOMAS:']);
+      finRows.push([]);
+      // Linha de total (equivalente à linha "Total" do arquivo original)
+      finRows.push(['Total', null]);
 
-        for (const a of snapshot.assets) {
-          const row0 = rowByName.get(a.name.toLowerCase());
-          if (row0 == null) continue;
-          const addr = XLSX.utils.encode_cell({ r: row0, c: range.s.c + 1 });
-          finWs[addr] = { t: 'n', v: a.saldo } as XLSX.CellObject;
-          this.setCellFormat(finWs, row0 + 1, range.s.c + 2, currencyZ);
-        }
-      } else {
-        const rows: Array<Array<unknown>> = [];
-        for (const a of snapshot.assets) rows.push([a.name, a.saldo]);
-        rows.push(['SOMAS:']);
-        const ws2 = XLSX.utils.aoa_to_sheet(rows, { cellDates: true });
-        for (let r = 1; r <= snapshot.assets.length; r++) this.setCellFormat(ws2, r, 2, currencyZ);
-        XLSX.utils.book_append_sheet(wb, ws2, 'Finanças');
-        return wb;
+      const finWs = XLSX.utils.aoa_to_sheet(finRows, { cellDates: true });
+      finWs['!cols'] = [{ wch: 28 }, { wch: 16 }];
+
+      // FIX Bug 5: formato monetário com locale pt-BR em todas as células de saldo
+      for (let r = 1; r <= assets.length; r++) {
+        this.setCellFormat(finWs, r, 2, '[$R$ -416]#,##0.00');
+      }
+
+      // Fórmula de total na última linha
+      if (assets.length > 0) {
+        const totalRowIdx = finRows.length; // 1-indexed
+        const totalAddr = XLSX.utils.encode_cell({ r: totalRowIdx - 1, c: 1 });
+        finWs[totalAddr] = {
+          t: 'n',
+          f: `SUM(B1:B${assets.length})`,
+        } as XLSX.CellObject;
+        this.setCellFormat(finWs, totalRowIdx, 2, '[$R$ -416]#,##0.00');
       }
 
       XLSX.utils.book_append_sheet(wb, finWs, 'Finanças');
     }
+
     return wb;
   }
 }
