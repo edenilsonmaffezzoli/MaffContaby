@@ -14,7 +14,6 @@ function formatHttpError(error: unknown, apiBaseUrl: string | undefined) {
     message?: string;
     response?: { status?: number; statusText?: string; data?: unknown };
   };
-
   const status = e?.response?.status;
   const statusText = e?.response?.statusText;
   const data = e?.response?.data;
@@ -22,20 +21,54 @@ function formatHttpError(error: unknown, apiBaseUrl: string | undefined) {
   if (typeof data === 'string' && data.trim()) {
     return status ? `${status} - ${data.trim()}` : data.trim();
   }
-
   if (status) {
     return statusText?.trim() ? `${status} - ${statusText.trim()}` : String(status);
   }
-
   const msg = e?.message?.trim();
   if (!msg) return 'Erro desconhecido';
-
   if (/network error|failed to fetch|err_network/i.test(msg)) {
     const base = apiBaseUrl?.trim() ? apiBaseUrl.trim() : '(sem baseURL)';
     return `Não consegui conectar na API (${base}). Verifique se a API está rodando.`;
   }
-
   return msg;
+}
+
+function UploadCloudIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M12 12v9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M8 17l4-5 4 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function DownloadIcon(props: { className?: string }) {
+  return (
+    <svg className={props.className} viewBox="0 0 24 24" fill="none">
+      <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M7 14l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M3 19h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function CheckCircleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M22 4L12 14.01l-3-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
 }
 
 export function ImportarPage() {
@@ -53,9 +86,7 @@ export function ImportarPage() {
         if (file.name.toLowerCase().endsWith('.json')) {
           const text = await file.text();
           const parsed = JSON.parse(text) as DbSnapshotV1;
-          if (parsed?.version !== 1) {
-            throw new Error('Snapshot inválido (version).');
-          }
+          if (parsed?.version !== 1) throw new Error('Snapshot inválido (version).');
           return importContabilidadeSnapshot(httpClient, parsed, replaceAll);
         }
         return importContabilidadeFile(httpClient, file, replaceAll);
@@ -102,9 +133,7 @@ export function ImportarPage() {
 
   const canInteract = !mutation.isPending && !exportMutation.isPending;
 
-  const pickFile = () => {
-    if (canInteract) fileInputRef.current?.click();
-  };
+  const pickFile = () => { if (canInteract) fileInputRef.current?.click(); };
 
   const setFirstFile = (files: FileList | File[]) => {
     const first = Array.isArray(files) ? files[0] : files.item(0);
@@ -113,6 +142,7 @@ export function ImportarPage() {
 
   return (
     <div className="page">
+      {/* Header */}
       <div className="page__header">
         <div>
           <h1 className="title">Importar</h1>
@@ -120,12 +150,13 @@ export function ImportarPage() {
         </div>
       </div>
 
+      {/* Info card */}
       <div className="card" style={{ background: 'var(--info-light)', border: '1px solid rgba(2,136,209,0.2)' }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
           <div style={{ color: 'var(--info)', marginTop: 1 }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-              <path d="M12 16v-4M12 8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+              <path d="M12 16v-4M12 8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
           </div>
           <div>
@@ -137,12 +168,14 @@ export function ImportarPage() {
         </div>
       </div>
 
+      {/* Main import card */}
       <div className="card">
         <div className="section-header">
           <h2 className="section-title">Configuração</h2>
         </div>
 
         <div className="row row--wrap">
+          {/* File upload */}
           <div className="field field--grow">
             <label className="label">Arquivo (opcional)</label>
             <input
@@ -159,14 +192,8 @@ export function ImportarPage() {
               role="button"
               tabIndex={0}
               onClick={pickFile}
-              onKeyDown={e => {
-                if (e.key === 'Enter' || e.key === ' ') pickFile();
-              }}
-              onDragOver={e => {
-                if (!canInteract) return;
-                e.preventDefault();
-                setIsDragging(true);
-              }}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') pickFile(); }}
+              onDragOver={e => { if (!canInteract) return; e.preventDefault(); setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={e => {
                 if (!canInteract) return;
@@ -205,6 +232,7 @@ export function ImportarPage() {
             )}
           </div>
 
+          {/* Options */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="field">
               <label className="label">Modo de importação</label>
@@ -233,9 +261,7 @@ export function ImportarPage() {
                     <div className="spinner" style={{ borderColor: 'rgba(255,255,255,0.4)', borderTopColor: 'transparent' }} />
                     Importando...
                   </>
-                ) : (
-                  'Importar agora'
-                )}
+                ) : 'Importar agora'}
               </button>
             </div>
 
@@ -263,11 +289,12 @@ export function ImportarPage() {
           </div>
         </div>
 
+        {/* Status messages */}
         {mutation.isError && (
           <div className="status-bar status-bar--error">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-              <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+              <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
             <div>
               <strong>Falha ao importar.</strong>
@@ -279,8 +306,8 @@ export function ImportarPage() {
         {exportMutation.isError && (
           <div className="status-bar status-bar--error">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-              <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+              <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
             <div>
               <strong>Falha ao exportar.</strong>
@@ -297,58 +324,5 @@ export function ImportarPage() {
         )}
       </div>
     </div>
-  );
-}
-
-function UploadCloudIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.8 9.6 3.5 3.5 0 0 1 18.5 18H7Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      <path d="M12 12v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M9.5 14.5 12 12l2.5 2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function FileIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      <path d="M14 3v6h6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function DownloadIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 3v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M7 10l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path
-        d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function CheckCircleIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-      <path d="M7 12.5l3 3 7-7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

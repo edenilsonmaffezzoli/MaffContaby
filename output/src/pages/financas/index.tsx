@@ -7,7 +7,7 @@ import { useState } from 'react';
 function PlusIcon(props: { className?: string }) {
   return (
     <svg className={props.className} viewBox="0 0 24 24" fill="none">
-      <path d="M12 4v16M4 12h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M12 4v16M4 12h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
     </svg>
   );
 }
@@ -15,7 +15,7 @@ function PlusIcon(props: { className?: string }) {
 function CheckIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-      <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -30,18 +30,15 @@ export function FinancasPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (input: { name: string; saldo: number; disponivelImediatamente: boolean }) => createAsset(httpClient, input),
+    mutationFn: (input: { name: string; saldo: number; disponivelImediatamente: boolean }) =>
+      createAsset(httpClient, input),
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['assets'] }),
   });
 
   const updateMutation = useMutation({
     mutationFn: (input: {
-      id: string;
-      name: string;
-      saldo: number;
-      disponivelImediatamente?: boolean;
-      asOfDate?: string;
-      observacao?: string;
+      id: string; name: string; saldo: number;
+      disponivelImediatamente?: boolean; asOfDate?: string; observacao?: string;
     }) =>
       updateAsset(httpClient, input.id, {
         name: input.name,
@@ -65,6 +62,7 @@ export function FinancasPage() {
 
   return (
     <div className="page">
+      {/* Header */}
       <div className="page__header">
         <div>
           <h1 className="title">Finanças</h1>
@@ -72,6 +70,7 @@ export function FinancasPage() {
         </div>
       </div>
 
+      {/* Summary stats */}
       <div className="stat-grid">
         <div className="stat-card">
           <div className="stat-card__label">Patrimônio Total</div>
@@ -87,12 +86,19 @@ export function FinancasPage() {
         </div>
       </div>
 
-      <NovoAtivo disabled={createMutation.isPending} onCreate={data => createMutation.mutate(data)} />
+      {/* Add asset form */}
+      <NovoAtivo
+        disabled={createMutation.isPending}
+        onCreate={data => createMutation.mutate(data)}
+      />
 
+      {/* Assets table */}
       <div className="card">
         <div className="section-header">
           <h2 className="section-title">Ativos</h2>
-          {assets.length > 0 && <span className="badge badge--info">{assets.length} {assets.length === 1 ? 'item' : 'itens'}</span>}
+          {assets.length > 0 && (
+            <span className="badge badge--info">{assets.length} {assets.length === 1 ? 'item' : 'itens'}</span>
+          )}
         </div>
 
         {assetsQuery.isLoading ? (
@@ -101,17 +107,14 @@ export function FinancasPage() {
             Carregando ativos...
           </div>
         ) : assetsQuery.isError ? (
-          <div className="status-bar status-bar--error">Falha ao carregar. Tente novamente.</div>
+          <div className="status-bar status-bar--error">
+            Falha ao carregar. Tente novamente.
+          </div>
         ) : assets.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state__icon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M3.5 7.5A3.5 3.5 0 0 1 7 4h12a1 1 0 0 1 0 2H7a1.5 1.5 0 0 0 0 3h13.5v9A3.5 3.5 0 0 1 17 21H7A3.5 3.5 0 0 1 3.5 17.5v-10Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinejoin="round"
-                />
+                <path d="M3.5 7.5A3.5 3.5 0 0 1 7 4h12a1 1 0 0 1 0 2H7a1.5 1.5 0 0 0 0 3h13.5v9A3.5 3.5 0 0 1 17 21H7A3.5 3.5 0 0 1 3.5 17.5v-10Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
               </svg>
             </div>
             <div className="empty-state__text">Nenhum ativo cadastrado</div>
@@ -166,10 +169,18 @@ function NovoAtivo(props: {
             disabled={props.disabled}
           />
         </div>
+
         <div className="field">
           <label className="label">Saldo (R$)</label>
-          <input className="input" placeholder="0,00" value={saldo} onChange={e => setSaldo(e.target.value)} disabled={props.disabled} />
+          <input
+            className="input"
+            placeholder="0,00"
+            value={saldo}
+            onChange={e => setSaldo(e.target.value)}
+            disabled={props.disabled}
+          />
         </div>
+
         <div className="field" style={{ justifyContent: 'flex-end', paddingBottom: 2 }}>
           <label className="checkbox">
             <input
@@ -181,6 +192,7 @@ function NovoAtivo(props: {
             Disponível imediatamente
           </label>
         </div>
+
         <div className="field">
           <label className="label">&nbsp;</label>
           <button
@@ -207,12 +219,8 @@ function AssetRow(props: {
   asset: AssetDto;
   disabled: boolean;
   onUpdate: (data: {
-    id: string;
-    name: string;
-    saldo: number;
-    disponivelImediatamente?: boolean;
-    asOfDate?: string;
-    observacao?: string;
+    id: string; name: string; saldo: number;
+    disponivelImediatamente?: boolean; asOfDate?: string; observacao?: string;
   }) => void;
   onDelete: () => void;
 }) {
@@ -226,9 +234,7 @@ function AssetRow(props: {
       {!isEditing ? (
         <>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 14 }} className="ellipsis">
-              {props.asset.name}
-            </div>
+            <div style={{ fontWeight: 600, fontSize: 14 }} className="ellipsis">{props.asset.name}</div>
             <div style={{ marginTop: 4 }}>
               {props.asset.disponivelImediatamente ? (
                 <span className="badge badge--success">
@@ -239,9 +245,11 @@ function AssetRow(props: {
               )}
             </div>
           </div>
+
           <div className="right" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15 }}>
             {formatCurrencyBRL(props.asset.saldo)}
           </div>
+
           <div className="right" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
             <label className="checkbox" style={{ marginRight: 4 }}>
               <input
@@ -258,10 +266,20 @@ function AssetRow(props: {
                 disabled={props.disabled}
               />
             </label>
-            <button className="button button--ghost button--sm" type="button" onClick={() => setIsEditing(true)} disabled={props.disabled}>
+            <button
+              className="button button--ghost button--sm"
+              type="button"
+              onClick={() => setIsEditing(true)}
+              disabled={props.disabled}
+            >
               Editar
             </button>
-            <button className="button button--danger button--sm" type="button" onClick={props.onDelete} disabled={props.disabled}>
+            <button
+              className="button button--danger button--sm"
+              type="button"
+              onClick={props.onDelete}
+              disabled={props.disabled}
+            >
               Excluir
             </button>
           </div>
@@ -300,7 +318,12 @@ function AssetRow(props: {
               >
                 Salvar
               </button>
-              <button className="button button--sm" type="button" onClick={() => setIsEditing(false)} disabled={props.disabled}>
+              <button
+                className="button button--sm"
+                type="button"
+                onClick={() => setIsEditing(false)}
+                disabled={props.disabled}
+              >
                 Cancelar
               </button>
             </div>
