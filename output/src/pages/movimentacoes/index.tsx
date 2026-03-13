@@ -15,10 +15,10 @@ type Grouped = {
 function RefreshIcon(props: { className?: string }) {
   return (
     <svg className={props.className} viewBox="0 0 24 24" fill="none">
-      <path d="M4 12a8 8 0 0 1 14.93-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M20 12a8 8 0 0 1-14.93 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M19 4v4h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M5 20v-4h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 12a8 8 0 0 1 14.93-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M20 12a8 8 0 0 1-14.93 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M19 4v4h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5 20v-4h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -26,7 +26,7 @@ function RefreshIcon(props: { className?: string }) {
 function PlusIcon(props: { className?: string }) {
   return (
     <svg className={props.className} viewBox="0 0 24 24" fill="none">
-      <path d="M12 4v16M4 12h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M12 4v16M4 12h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
     </svg>
   );
 }
@@ -34,7 +34,7 @@ function PlusIcon(props: { className?: string }) {
 function ChevronIcon(props: { className?: string }) {
   return (
     <svg className={`chevron ${props.className ?? ''}`} viewBox="0 0 24 24" fill="none" width="16" height="16">
-      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -74,16 +74,15 @@ export function MovimentacoesPage() {
   const total = useMemo(() => grouped.reduce((sum, g) => sum + g.total, 0), [grouped]);
 
   const createEntryMutation = useMutation({
-    mutationFn: (input: { grupo: string; valor: number; data?: string; observacao?: string }) => {
-      return createEntry(httpClient, {
+    mutationFn: (input: { grupo: string; valor: number; data?: string; observacao?: string }) =>
+      createEntry(httpClient, {
         personId: selectedPersonId,
         competencia: competenciaToDateOnly(competencia),
         grupo: input.grupo,
         valor: input.valor,
         data: input.data ?? null,
         observacao: input.observacao ?? null,
-      });
-    },
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['entries', selectedPersonId, competencia] });
     },
@@ -114,6 +113,7 @@ export function MovimentacoesPage() {
 
   return (
     <div className="page">
+      {/* Header */}
       <div className="page__header">
         <div>
           <h1 className="title">Movimentações</h1>
@@ -121,6 +121,7 @@ export function MovimentacoesPage() {
         </div>
       </div>
 
+      {/* Summary stats */}
       {selectedPersonId && grouped.length > 0 && (
         <div className="stat-grid">
           <div className="stat-card">
@@ -138,6 +139,7 @@ export function MovimentacoesPage() {
         </div>
       )}
 
+      {/* Filters card */}
       <div className="card">
         <div className="section-header">
           <h2 className="section-title">Filtros</h2>
@@ -145,12 +147,15 @@ export function MovimentacoesPage() {
         <div className="row row--wrap">
           <div className="field">
             <label className="label">Pessoa</label>
-            <select className="input" value={selectedPersonId} onChange={e => setSelectedPersonId(e.target.value)} disabled={peopleQuery.isLoading}>
+            <select
+              className="input"
+              value={selectedPersonId}
+              onChange={e => setSelectedPersonId(e.target.value)}
+              disabled={peopleQuery.isLoading}
+            >
               <option value="">Selecione...</option>
               {(peopleQuery.data ?? []).map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
+                <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
           </div>
@@ -168,7 +173,12 @@ export function MovimentacoesPage() {
 
           <div className="field">
             <label className="label">&nbsp;</label>
-            <button className="button" type="button" onClick={() => entriesQuery.refetch()} disabled={!selectedPersonId}>
+            <button
+              className="button"
+              type="button"
+              onClick={() => entriesQuery.refetch()}
+              disabled={!selectedPersonId}
+            >
               <RefreshIcon className="icon-16" />
               Atualizar
             </button>
@@ -176,11 +186,13 @@ export function MovimentacoesPage() {
         </div>
       </div>
 
+      {/* New entry form */}
       <NovaMovimentacao
         disabled={!canInteract || createEntryMutation.isPending}
         onCreate={data => createEntryMutation.mutate(data)}
       />
 
+      {/* Entries table */}
       <div className="card">
         <div className="section-header">
           <h2 className="section-title">Lançamentos</h2>
@@ -195,30 +207,17 @@ export function MovimentacoesPage() {
             Carregando lançamentos...
           </div>
         ) : entriesQuery.isError ? (
-          <div className="status-bar status-bar--error">Falha ao carregar os dados. Tente novamente.</div>
+          <div className="status-bar status-bar--error">
+            Falha ao carregar os dados. Tente novamente.
+          </div>
         ) : !selectedPersonId ? (
           <div className="empty-state">
             <div className="empty-state__icon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-                <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="2" />
-                <path
-                  d="M23 21v-2a4 4 0 0 0-3-3.87"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M16 3.13a4 4 0 0 1 0 7.75"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="2"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
               </svg>
             </div>
             <div className="empty-state__text">Selecione uma pessoa para ver os lançamentos</div>
@@ -227,7 +226,7 @@ export function MovimentacoesPage() {
           <div className="empty-state">
             <div className="empty-state__icon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M4 20h16M7 20V12M12 20V8M17 20V4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M4 20h16M7 20V12M12 20V8M17 20V4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
               </svg>
             </div>
             <div className="empty-state__text">Sem lançamentos para este período</div>
@@ -245,9 +244,7 @@ export function MovimentacoesPage() {
                 <summary className="table__row__summary table__row__summary--mov">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                     <ChevronIcon />
-                    <span className="ellipsis" style={{ fontWeight: 600, fontSize: 14 }}>
-                      {g.grupo}
-                    </span>
+                    <span className="ellipsis" style={{ fontWeight: 600, fontSize: 14 }}>{g.grupo}</span>
                   </div>
                   <div className="right">
                     <span className="badge badge--neutral">{g.count}</span>
@@ -319,7 +316,13 @@ function NovaMovimentacao(props: {
 
         <div className="field">
           <label className="label">Data</label>
-          <input className="input" type="date" value={data} onChange={e => setData(e.target.value)} disabled={props.disabled} />
+          <input
+            className="input"
+            type="date"
+            value={data}
+            onChange={e => setData(e.target.value)}
+            disabled={props.disabled}
+          />
         </div>
 
         <div className="field field--grow">
@@ -381,14 +384,26 @@ function EntryRow(props: {
             <div className="entry__title">{formatCurrencyBRL(props.entry.valor)}</div>
             <div className="entry__meta">
               {props.entry.data && <span>{props.entry.data}</span>}
-              {props.entry.observacao && <span className="ellipsis" style={{ maxWidth: 260 }}>{props.entry.observacao}</span>}
+              {props.entry.observacao && (
+                <span className="ellipsis" style={{ maxWidth: 260 }}>{props.entry.observacao}</span>
+              )}
             </div>
           </div>
           <div className="entry__actions">
-            <button className="button button--ghost button--sm" type="button" onClick={() => setIsEditing(true)} disabled={props.disabled}>
+            <button
+              className="button button--ghost button--sm"
+              type="button"
+              onClick={() => setIsEditing(true)}
+              disabled={props.disabled}
+            >
               Editar
             </button>
-            <button className="button button--danger button--sm" type="button" onClick={props.onDelete} disabled={props.disabled}>
+            <button
+              className="button button--danger button--sm"
+              type="button"
+              onClick={props.onDelete}
+              disabled={props.disabled}
+            >
               Excluir
             </button>
           </div>
@@ -410,12 +425,7 @@ function EntryRow(props: {
             </div>
             <div className="field field--grow">
               <label className="label">Observação</label>
-              <input
-                className="input input--small"
-                value={observacao}
-                onChange={e => setObservacao(e.target.value)}
-                disabled={props.disabled}
-              />
+              <input className="input input--small" value={observacao} onChange={e => setObservacao(e.target.value)} disabled={props.disabled} />
             </div>
           </div>
           <div className="entry__actions">
@@ -437,7 +447,12 @@ function EntryRow(props: {
             >
               Salvar
             </button>
-            <button className="button button--sm" type="button" onClick={() => setIsEditing(false)} disabled={props.disabled}>
+            <button
+              className="button button--sm"
+              type="button"
+              onClick={() => setIsEditing(false)}
+              disabled={props.disabled}
+            >
               Cancelar
             </button>
           </div>

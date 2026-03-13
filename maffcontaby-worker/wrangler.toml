@@ -4,5 +4,5 @@ compatibility_date = "2026-03-13"
 send_metrics = false
 
 kv_namespaces = [
-  { binding = "MAFF_KV", id = "REPLACE_ME", preview_id = "REPLACE_ME" }
+  { binding = "MAFF_KV", id = "69be979544c543c7852fcc63a5a43603", preview_id = "69be979544c543c7852fcc63a5a43603" }
 ]
