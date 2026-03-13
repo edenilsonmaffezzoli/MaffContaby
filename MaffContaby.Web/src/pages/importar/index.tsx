@@ -366,6 +366,68 @@ function isXlsxNotSupportedInWorkerError(error: unknown) {
   return /xlsx/i.test(data) && /use json/i.test(data);
 }
 
+function sanitizeSheetName(name: string) {
+  const trimmed = name.trim();
+  const invalid = new Set(['[', ']', ':', '*', '?', '/', '\\', "'"]);
+  const stripped = Array.from(trimmed)
+    .filter(ch => !invalid.has(ch))
+    .join('')
+    .trim();
+  const safe = stripped || 'Planilha';
+  return safe.length > 31 ? safe.slice(0, 31) : safe;
+}
+
+function snapshotToWorkbook(snapshot: DbSnapshotV1) {
+  const wb = XLSX.utils.book_new();
+
+  const people = [...snapshot.people].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  const entries = [...snapshot.entries].sort((a, b) => {
+    const c = a.competencia.localeCompare(b.competencia);
+    if (c !== 0) return c;
+    const g = a.grupo.localeCompare(b.grupo, 'pt-BR');
+    if (g !== 0) return g;
+    return a.id.localeCompare(b.id);
+  });
+
+  for (const person of people) {
+    const rows: Array<Array<string | number | boolean | null>> = [
+      ['Competência', 'Grupo', 'Valor', 'Observação', 'Data'],
+    ];
+
+    for (const e of entries) {
+      if (e.personId !== person.id) continue;
+      const competencia = e.competencia ? e.competencia.slice(0, 7) : '';
+      const data = e.data ? e.data.slice(0, 10) : '';
+      rows.push([competencia, e.grupo, e.valor, e.observacao ?? '', data]);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 12 }, { wch: 28 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(person.name));
+  }
+
+  const finRows: Array<Array<string | number | boolean | null>> = [
+    ['Item', 'Saldo', 'Disponível imediatamente', 'Data base', 'Observação'],
+  ];
+  const assets = [...snapshot.assets].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  for (const a of assets) {
+    const asOf = a.asOfDate ? a.asOfDate.slice(0, 10) : '';
+    finRows.push([a.name, a.saldo, a.disponivelImediatamente, asOf, a.observacao ?? '']);
+  }
+
+  const finWs = XLSX.utils.aoa_to_sheet(finRows);
+  finWs['!cols'] = [{ wch: 28 }, { wch: 12 }, { wch: 22 }, { wch: 12 }, { wch: 28 }];
+  XLSX.utils.book_append_sheet(wb, finWs, 'Finanças');
+
+  return wb;
+}
+
+function snapshotToXlsxBlob(snapshot: DbSnapshotV1) {
+  const wb = snapshotToWorkbook(snapshot);
+  const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
 export function ImportarPage() {
   const httpClient = useHttpClient();
   const queryClient = useQueryClient();
@@ -407,14 +469,27 @@ export function ImportarPage() {
   });
 
   const exportMutation = useMutation({
-    mutationFn: () => exportContabilidade(httpClient),
-    onSuccess: blob => {
+    mutationFn: async () => {
+      const blob = await exportContabilidade(httpClient);
+      const fileName = `Contabilidade-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+      const type = blob.type.toLowerCase();
+      if (type.includes('json')) {
+        const text = await blob.text();
+        const parsed = JSON.parse(text) as DbSnapshotV1;
+        if (parsed?.version !== 1) {
+          throw new Error('Snapshot inválido (version).');
+        }
+        return { blob: snapshotToXlsxBlob(parsed), fileName };
+      }
+
+      return { blob, fileName };
+    },
+    onSuccess: ({ blob, fileName }) => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const isJson = blob.type.toLowerCase().includes('json');
-      const ext = isJson ? 'json' : 'xlsx';
-      a.download = `Contabilidade-export-${new Date().toISOString().slice(0, 10)}.${ext}`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       a.remove();
