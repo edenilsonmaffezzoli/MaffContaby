@@ -377,6 +377,79 @@ function sanitizeSheetName(name: string) {
   return safe.length > 31 ? safe.slice(0, 31) : safe;
 }
 
+function tryParseIsoDate(value: string | null | undefined) {
+  const v = value?.trim();
+  if (!v) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function tryParseCompetenciaToDate(value: string | null | undefined) {
+  const v = value?.trim();
+  if (!v) return null;
+  const match = /^(\d{4})-(\d{2})/.exec(v);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
+  return new Date(Date.UTC(year, month - 1, 1));
+}
+
+function setCellFormat(ws: XLSX.WorkSheet, r1: number, c1: number, z: string) {
+  const addr = XLSX.utils.encode_cell({ r: r1 - 1, c: c1 - 1 });
+  const cell = ws[addr] as XLSX.CellObject | undefined;
+  if (!cell) return;
+  (cell as unknown as { z?: string }).z = z;
+}
+
+function setCellValue(ws: XLSX.WorkSheet, r1: number, c1: number, value: unknown) {
+  const addr = XLSX.utils.encode_cell({ r: r1 - 1, c: c1 - 1 });
+  ws[addr] = { t: 's', v: '' } as XLSX.CellObject;
+  const cell = ws[addr] as XLSX.CellObject;
+
+  if (value == null) {
+    (cell as unknown as { t: string; v: unknown }).t = 's';
+    (cell as unknown as { t: string; v: unknown }).v = '';
+    return;
+  }
+
+  if (typeof value === 'number') {
+    (cell as unknown as { t: string; v: unknown }).t = 'n';
+    (cell as unknown as { t: string; v: unknown }).v = value;
+    return;
+  }
+
+  if (typeof value === 'boolean') {
+    (cell as unknown as { t: string; v: unknown }).t = 'b';
+    (cell as unknown as { t: string; v: unknown }).v = value;
+    return;
+  }
+
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    (cell as unknown as { t: string; v: unknown }).t = 'd';
+    (cell as unknown as { t: string; v: unknown }).v = value;
+    return;
+  }
+
+  (cell as unknown as { t: string; v: unknown }).t = 's';
+  (cell as unknown as { t: string; v: unknown }).v = String(value);
+}
+
+function addAutoFilter(ws: XLSX.WorkSheet, endRow1: number, endCol1: number) {
+  ws['!autofilter'] = {
+    ref: XLSX.utils.encode_range({
+      s: { r: 0, c: 0 },
+      e: { r: Math.max(0, endRow1 - 1), c: Math.max(0, endCol1 - 1) },
+    }),
+  };
+}
+
 function snapshotToWorkbook(snapshot: DbSnapshotV1) {
   const wb = XLSX.utils.book_new();
 
@@ -389,34 +462,90 @@ function snapshotToWorkbook(snapshot: DbSnapshotV1) {
     return a.id.localeCompare(b.id);
   });
 
-  for (const person of people) {
-    const rows: Array<Array<string | number | boolean | null>> = [
-      ['Competência', 'Grupo', 'Valor', 'Observação', 'Data'],
-    ];
+  const totalSaldo = snapshot.assets.reduce((sum, a) => sum + a.saldo, 0);
+  const totalDisponivel = snapshot.assets.reduce((sum, a) => sum + (a.disponivelImediatamente ? a.saldo : 0), 0);
 
+  {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['MaffContaby - Exportação'],
+      ['Atualizado em', tryParseIsoDate(snapshot.updatedAt) ?? snapshot.updatedAt],
+      ['Pessoas', people.length],
+      ['Lançamentos', snapshot.entries.length],
+      ['Ativos', snapshot.assets.length],
+      ['Saldo total', totalSaldo],
+      ['Saldo disponível', totalDisponivel],
+    ]);
+    ws['!cols'] = [{ wch: 22 }, { wch: 28 }];
+    setCellFormat(ws, 2, 2, 'dd/mm/yyyy hh:mm');
+    setCellFormat(ws, 6, 2, '"R$" #,##0.00');
+    setCellFormat(ws, 7, 2, '"R$" #,##0.00');
+    XLSX.utils.book_append_sheet(wb, ws, 'Resumo');
+  }
+
+  for (const person of people) {
+    const rows: Array<Array<unknown>> = [['Competência', 'Grupo', 'Valor', 'Observação', 'Data']];
     for (const e of entries) {
       if (e.personId !== person.id) continue;
-      const competencia = e.competencia ? e.competencia.slice(0, 7) : '';
-      const data = e.data ? e.data.slice(0, 10) : '';
-      rows.push([competencia, e.grupo, e.valor, e.observacao ?? '', data]);
+      rows.push([
+        tryParseCompetenciaToDate(e.competencia),
+        e.grupo,
+        e.valor,
+        e.observacao ?? '',
+        tryParseIsoDate(e.data),
+      ]);
     }
 
-    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const ws = XLSX.utils.aoa_to_sheet(rows, { cellDates: true });
     ws['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 12 }, { wch: 28 }, { wch: 12 }];
+    const lastRow = Math.max(1, rows.length);
+    addAutoFilter(ws, lastRow, 5);
+
+    for (let r = 2; r <= lastRow; r++) {
+      setCellFormat(ws, r, 1, 'mm/yyyy');
+      setCellFormat(ws, r, 3, '"R$" #,##0.00');
+      setCellFormat(ws, r, 5, 'dd/mm/yyyy');
+    }
+
     XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(person.name));
   }
 
-  const finRows: Array<Array<string | number | boolean | null>> = [
-    ['Item', 'Saldo', 'Disponível imediatamente', 'Data base', 'Observação'],
-  ];
+  const finRows: Array<Array<unknown>> = [['Item', 'Saldo', 'Disponível imediatamente', 'Data base', 'Observação']];
   const assets = [...snapshot.assets].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   for (const a of assets) {
-    const asOf = a.asOfDate ? a.asOfDate.slice(0, 10) : '';
-    finRows.push([a.name, a.saldo, a.disponivelImediatamente, asOf, a.observacao ?? '']);
+    finRows.push([
+      a.name,
+      a.saldo,
+      a.disponivelImediatamente ? 'Sim' : 'Não',
+      tryParseIsoDate(a.asOfDate),
+      a.observacao ?? '',
+    ]);
   }
 
-  const finWs = XLSX.utils.aoa_to_sheet(finRows);
+  finRows.push([]);
+  finRows.push(['Totais', null, 'Total disponível imediatamente', null, null]);
+
+  const finWs = XLSX.utils.aoa_to_sheet(finRows, { cellDates: true });
   finWs['!cols'] = [{ wch: 28 }, { wch: 12 }, { wch: 22 }, { wch: 12 }, { wch: 28 }];
+  const finLast = Math.max(1, assets.length + 1);
+  addAutoFilter(finWs, finLast, 5);
+
+  for (let r = 2; r <= finLast; r++) {
+    setCellFormat(finWs, r, 2, '"R$" #,##0.00');
+    setCellFormat(finWs, r, 4, 'dd/mm/yyyy');
+  }
+
+  const totalsRow = finLast + 2;
+  if (assets.length > 0) {
+    setCellValue(finWs, totalsRow, 2, null);
+    const bCell = XLSX.utils.encode_cell({ r: totalsRow - 1, c: 1 });
+    finWs[bCell] = { t: 'n', f: `SUM(B2:B${finLast})` } as XLSX.CellObject;
+    setCellFormat(finWs, totalsRow, 2, '"R$" #,##0.00');
+
+    const dCell = XLSX.utils.encode_cell({ r: totalsRow - 1, c: 3 });
+    finWs[dCell] = { t: 'n', f: `SUMIF(C2:C${finLast},"Sim",B2:B${finLast})` } as XLSX.CellObject;
+    setCellFormat(finWs, totalsRow, 4, '"R$" #,##0.00');
+  }
+
   XLSX.utils.book_append_sheet(wb, finWs, 'Finanças');
 
   return wb;
@@ -424,7 +553,7 @@ function snapshotToWorkbook(snapshot: DbSnapshotV1) {
 
 function snapshotToXlsxBlob(snapshot: DbSnapshotV1) {
   const wb = snapshotToWorkbook(snapshot);
-  const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellDates: true });
   return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
