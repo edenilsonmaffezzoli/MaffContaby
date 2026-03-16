@@ -48,3 +48,18 @@ export async function deleteEntry(httpClient: AxiosInstance, id: string) {
   await httpClient.delete(`/api/entries/${id}`);
 }
 
+export async function downloadRelatorioExecutivo(
+  httpClient: AxiosInstance,
+  params?: { personId?: string; competenciaFrom?: string; competenciaTo?: string; competencia?: string }
+) {
+  const { data } = await httpClient.get<Blob>('/api/reports/executivo', { params, responseType: 'blob' });
+  return data;
+}
+
+export async function downloadRelatorioDetalhado(
+  httpClient: AxiosInstance,
+  params?: { personId?: string; competenciaFrom?: string; competenciaTo?: string; competencia?: string }
+) {
+  const { data } = await httpClient.get<Blob>('/api/reports/detalhado', { params, responseType: 'blob' });
+  return data;
+}

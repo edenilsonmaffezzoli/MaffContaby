@@ -1,5 +1,11 @@
 import { useHttpClient } from '@/hooks/use-http-client';
-import { createEntry, deleteEntry, getEntries, updateEntry, type EntryDto } from '@/services/entries-service';
+import {
+  createEntry,
+  deleteEntry,
+  getEntries,
+  updateEntry,
+  type EntryDto,
+} from '@/services/entries-service';
 import { getPeople } from '@/services/people-service';
 import { competenciaToDateOnly, formatCompetencia, formatCurrencyBRL } from '@/utils/format';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';

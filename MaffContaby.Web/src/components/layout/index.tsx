@@ -48,6 +48,21 @@ function UploadIcon(props: { className?: string }) {
   );
 }
 
+function FileTextIcon(props: { className?: string }) {
+  return (
+    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M14 2H7a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V8l-6-6Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M8 13h8M8 17h8M8 9h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function LogoMark() {
   return (
     <svg width="22" height="22" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -106,6 +121,14 @@ export function Layout() {
             >
               <WalletIcon className="icon-20" />
               <span>Finanças</span>
+            </NavLink>
+            <NavLink
+              to="/relatorios"
+              className={({ isActive }) => (isActive ? 'sidelink sidelink--active' : 'sidelink')}
+              onClick={() => setIsOpen(false)}
+            >
+              <FileTextIcon className="icon-20" />
+              <span>Relatórios</span>
             </NavLink>
             <NavLink
               to="/importar"
