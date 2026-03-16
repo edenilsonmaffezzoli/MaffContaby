@@ -7,6 +7,9 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260313.0",
     "typescript": "^5.7.3",
