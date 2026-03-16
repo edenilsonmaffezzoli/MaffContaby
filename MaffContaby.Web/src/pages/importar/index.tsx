@@ -6,6 +6,7 @@ import {
   importContabilidadeFile,
   importContabilidadeSnapshot,
   ContabilidadePlanilha,
+  normalizeSnapshotV1,
   type DbSnapshotV1,
 } from '@/services/import-service';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -102,10 +103,11 @@ export function ImportarPage() {
         if (file.name.toLowerCase().endsWith('.json')) {
           const text = await file.text();
           const parsed = JSON.parse(text) as DbSnapshotV1;
-          if (parsed?.version !== 1) {
+          const normalized = normalizeSnapshotV1(parsed);
+          if (!normalized) {
             throw new Error('Snapshot inválido (version).');
           }
-          return importContabilidadeSnapshot(httpClient, parsed, replaceAll);
+          return importContabilidadeSnapshot(httpClient, normalized, replaceAll);
         }
         if (file.name.toLowerCase().endsWith('.xlsx')) {
           try {
@@ -136,10 +138,11 @@ export function ImportarPage() {
       if (type.includes('json')) {
         const text = await blob.text();
         const parsed = JSON.parse(text) as DbSnapshotV1;
-        if (parsed?.version !== 1) {
+        const normalized = normalizeSnapshotV1(parsed);
+        if (!normalized) {
           throw new Error('Snapshot inválido (version).');
         }
-        return { blob: ContabilidadePlanilha.snapshotToXlsxBlob(parsed), fileName };
+        return { blob: ContabilidadePlanilha.snapshotToXlsxBlob(normalized), fileName };
       }
 
       return { blob, fileName };
