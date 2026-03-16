@@ -23,13 +23,76 @@ export type DbSnapshotV1 = {
     personId: string;
     competencia: string;
     grupo: string;
-    // FIX Bug 2: preserva múltiplos valores por linha (parcelas separadas)
-    // em vez de somar tudo num único número
-    valores: number[];
+    valor: number;
     observacao: string | null;
     data: string | null;
   }[];
 };
+
+export function normalizeSnapshotV1(input: unknown) {
+  const s = input as {
+    version?: unknown;
+    updatedAt?: unknown;
+    people?: unknown;
+    assets?: unknown;
+    entries?: unknown;
+  };
+  if (s?.version !== 1) return null;
+  if (!Array.isArray(s.people) || !Array.isArray(s.assets) || !Array.isArray(s.entries)) return null;
+
+  const people = s.people as DbSnapshotV1['people'];
+  const assets = s.assets as DbSnapshotV1['assets'];
+
+  const entries: DbSnapshotV1['entries'] = [];
+  for (const raw of s.entries as unknown[]) {
+    const e = raw as {
+      id?: unknown;
+      personId?: unknown;
+      competencia?: unknown;
+      grupo?: unknown;
+      valor?: unknown;
+      valores?: unknown;
+      observacao?: unknown;
+      data?: unknown;
+    };
+
+    const id = typeof e.id === 'string' && e.id.trim() ? e.id.trim() : crypto.randomUUID();
+    const personId = typeof e.personId === 'string' ? e.personId : '';
+    const competencia = typeof e.competencia === 'string' ? e.competencia : '';
+    const grupo = typeof e.grupo === 'string' ? e.grupo : '';
+    const observacao = typeof e.observacao === 'string' ? e.observacao : null;
+    const data = typeof e.data === 'string' ? e.data : null;
+
+    if (!personId || !competencia || !grupo) continue;
+
+    const valorNum = typeof e.valor === 'number' ? e.valor : Number.NaN;
+    if (Number.isFinite(valorNum)) {
+      if (valorNum !== 0) {
+        entries.push({ id, personId, competencia, grupo, valor: valorNum, observacao, data });
+      }
+      continue;
+    }
+
+    if (Array.isArray(e.valores)) {
+      const valores = (e.valores as unknown[])
+        .map(v => (typeof v === 'number' ? v : Number.NaN))
+        .filter(v => Number.isFinite(v) && v !== 0);
+
+      for (let i = 0; i < valores.length; i++) {
+        const entryId = i === 0 ? id : crypto.randomUUID();
+        entries.push({ id: entryId, personId, competencia, grupo, valor: valores[i], observacao, data });
+      }
+    }
+  }
+
+  return {
+    version: 1,
+    updatedAt: typeof s.updatedAt === 'string' ? s.updatedAt : new Date().toISOString(),
+    people,
+    assets,
+    entries,
+  } satisfies DbSnapshotV1;
+}
 
 export async function importContabilidade(httpClient: AxiosInstance, replaceAll: boolean) {
   const { data } = await httpClient.post<ImportResult>('/api/import/contabilidade', null, {
@@ -305,26 +368,19 @@ export class ContabilidadePlanilha {
           const lastCol = this.findLastNonEmptyCol(ws, r, range.s.c + 1, range.e.c);
           if (lastCol < range.s.c + 1) continue;
 
-          // FIX Bug 2: coleta cada valor individualmente em vez de somar
-          const valores: number[] = [];
           for (let c = range.s.c + 1; c <= lastCol; c++) {
             const value = this.tryGetNumber(this.getCell(ws, r, c));
-            if (value != null && value !== 0) {
-              valores.push(value);
-            }
+            if (value == null || value === 0) continue;
+            entries.push({
+              id: crypto.randomUUID(),
+              personId: person.id,
+              competencia: this.normalizeCompetenciaDate(competencia),
+              grupo: label,
+              valor: value,
+              observacao: null,
+              data: null,
+            });
           }
-
-          if (valores.length === 0) continue;
-
-          entries.push({
-            id: crypto.randomUUID(),
-            personId: person.id,
-            competencia: this.normalizeCompetenciaDate(competencia),
-            grupo: label,
-            valores,
-            observacao: null,
-            data: null,
-          });
         }
       } else {
         const headerRow = range.s.r;
@@ -353,8 +409,7 @@ export class ContabilidadePlanilha {
               personId: person.id,
               competencia: this.normalizeCompetenciaDate(comp),
               grupo: label,
-              // FIX Bug 2: mesmo no layout de colunas, usa o array valores
-              valores: [value],
+              valor: value,
               observacao: null,
               data: null,
             });
@@ -478,26 +533,24 @@ export class ContabilidadePlanilha {
         const compRow: Array<unknown> = [compDate ?? this.formatCompetenciaLabel(comp)];
         rows.push(compRow);
 
-        // Determina o número máximo de colunas de valor nesta competência
-        const maxCols = compEntries.reduce((max, e) => Math.max(max, e.valores.length), 0);
+        const byGroup = new Map<string, DbSnapshotV1['entries']>();
+        for (const e of compEntries) {
+          const list = byGroup.get(e.grupo) ?? [];
+          list.push(e);
+          byGroup.set(e.grupo, list);
+        }
+        const groups = [...byGroup.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
 
-        // Total por coluna para a linha Total
-        const colTotals: number[] = Array(maxCols).fill(0);
-
-        for (const entry of compEntries) {
-          const row: Array<unknown> = [entry.grupo];
-          for (let i = 0; i < entry.valores.length; i++) {
-            row.push(entry.valores[i]);
-            colTotals[i] = (colTotals[i] ?? 0) + entry.valores[i];
-          }
+        for (const [grupo, groupEntries] of groups) {
+          const sorted = groupEntries.slice().sort((a, b) => a.id.localeCompare(b.id));
+          const row: Array<unknown> = [grupo, ...sorted.map(e => e.valor)];
           rows.push(row);
         }
 
         // Linha Total da competência
         const totalRow: Array<unknown> = ['Total'];
-        // FIX Bug 2: soma dos primeiros valores de cada entrada (coluna B)
-        const totalB = compEntries.reduce((sum, e) => sum + (e.valores[0] ?? 0), 0);
-        totalRow.push(totalB);
+        const total = compEntries.reduce((sum, e) => sum + e.valor, 0);
+        totalRow.push(total);
         rows.push(totalRow);
 
         // Linha vazia entre competências
@@ -507,7 +560,13 @@ export class ContabilidadePlanilha {
       const ws = XLSX.utils.aoa_to_sheet(rows, { cellDates: true });
 
       // Largura das colunas: coluna A mais larga, demais padrão
-      const maxDataCols = personEntries.reduce((max, e) => Math.max(max, e.valores.length), 1);
+      const maxDataCols = competencias.reduce((max, comp) => {
+        const compEntries = personEntries.filter(e => e.competencia === comp);
+        const byGroup = new Map<string, number>();
+        for (const e of compEntries) byGroup.set(e.grupo, (byGroup.get(e.grupo) ?? 0) + 1);
+        const compMax = Math.max(0, ...byGroup.values());
+        return Math.max(max, compMax);
+      }, 1);
       ws['!cols'] = [{ wch: 22 }, ...Array(maxDataCols).fill({ wch: 12 })];
 
       // FIX Bug 4: aplica formato [$-416]mmm/yy nas células de competência (tipo Date)
@@ -519,10 +578,17 @@ export class ContabilidadePlanilha {
         this.setCellFormat(ws, rowIdx + 1, 1, '[$-416]mmm/yy');
         rowIdx++;
 
-        for (const entry of compEntries) {
-          // Células de valor: formato monetário com locale
-          for (let c = 0; c < entry.valores.length; c++) {
-            // FIX Bug 5: formato [$R$ -416]#,##0.00
+        const byGroup = new Map<string, DbSnapshotV1['entries']>();
+        for (const e of compEntries) {
+          const list = byGroup.get(e.grupo) ?? [];
+          list.push(e);
+          byGroup.set(e.grupo, list);
+        }
+        const groups = [...byGroup.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
+
+        for (const [, groupEntries] of groups) {
+          const sorted = groupEntries.slice().sort((a, b) => a.id.localeCompare(b.id));
+          for (let c = 0; c < sorted.length; c++) {
             this.setCellFormat(ws, rowIdx + 1, c + 2, '[$R$ -416]#,##0.00');
           }
           rowIdx++;

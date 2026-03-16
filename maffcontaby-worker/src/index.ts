@@ -406,7 +406,47 @@ async function buildDetalhadoPdf(db: DbSnapshot, params: ReportParams) {
 
 async function readDb(env: Env): Promise<DbSnapshot> {
   const stored = (await env.MAFF_KV.get(DB_KEY, { type: 'json' })) as DbSnapshot | null;
-  if (stored && stored.version === 1) return stored;
+  if (stored && stored.version === 1) {
+    const anyStored = stored as unknown as { entries?: unknown };
+    const rawEntries = Array.isArray(anyStored.entries) ? (anyStored.entries as unknown[]) : [];
+    const entries: DbSnapshot['entries'] = rawEntries
+      .map(raw => {
+        const e = raw as {
+          id?: unknown;
+          personId?: unknown;
+          competencia?: unknown;
+          grupo?: unknown;
+          valor?: unknown;
+          valores?: unknown;
+          observacao?: unknown;
+          data?: unknown;
+        };
+
+        const valoresSum =
+          Array.isArray(e.valores)
+            ? (e.valores as unknown[]).reduce<number>((sum, v) => {
+                const n = typeof v === 'number' ? v : Number.NaN;
+                return Number.isFinite(n) ? sum + n : sum;
+              }, 0)
+            : 0;
+
+        const valorRaw = typeof e.valor === 'number' ? e.valor : Number.NaN;
+        const valor: number = Number.isFinite(valorRaw) ? valorRaw : valoresSum;
+
+        return {
+          id: typeof e.id === 'string' && e.id.trim() ? e.id.trim() : crypto.randomUUID(),
+          personId: typeof e.personId === 'string' ? e.personId : '',
+          competencia: typeof e.competencia === 'string' ? e.competencia : '',
+          grupo: typeof e.grupo === 'string' ? e.grupo : '',
+          valor,
+          observacao: typeof e.observacao === 'string' ? e.observacao : null,
+          data: typeof e.data === 'string' ? e.data : null,
+        };
+      })
+      .filter(e => e.personId && e.competencia && e.grupo);
+
+    return { ...stored, entries };
+  }
   return {
     version: 1,
     updatedAt: new Date().toISOString(),
