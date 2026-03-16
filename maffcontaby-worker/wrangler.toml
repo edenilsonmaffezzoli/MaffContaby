@@ -1,5 +1,6 @@
 name = "maffcontaby-worker"
 main = "src/index.ts"
+account_id = "45fe8ece5b41c3fce35f04f61709dd3b"
 compatibility_date = "2026-03-13"
 send_metrics = false
 
