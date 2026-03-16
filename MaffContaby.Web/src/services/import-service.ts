@@ -72,6 +72,10 @@ export async function exportContabilidade(httpClient: AxiosInstance) {
   return data;
 }
 
+export async function clearDatabase(httpClient: AxiosInstance) {
+  await httpClient.delete('/api/db');
+}
+
 export class ContabilidadePlanilha {
   private static readonly monthMap: Record<string, number> = {
     jan: 1,
