@@ -472,6 +472,18 @@ export default {
         return withCors(json(saved));
       }
 
+      if (method === 'DELETE') {
+        const cleared: DbSnapshot = {
+          version: 1,
+          updatedAt: new Date().toISOString(),
+          people: [],
+          assets: [],
+          entries: [],
+        };
+        await writeDb(env, cleared);
+        return withCors(text('', { status: 204 }));
+      }
+
       return withCors(methodNotAllowed());
     }
 

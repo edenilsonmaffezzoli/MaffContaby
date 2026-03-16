@@ -1,5 +1,6 @@
 import { useHttpClient } from '@/hooks/use-http-client';
 import {
+  clearDatabase,
   exportContabilidade,
   importContabilidade,
   importContabilidadeFile,
@@ -155,6 +156,17 @@ export function ImportarPage() {
     },
   });
 
+  const clearMutation = useMutation({
+    mutationFn: async () => {
+      await clearDatabase(httpClient);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['assets'] });
+      await queryClient.invalidateQueries({ queryKey: ['people'] });
+      await queryClient.invalidateQueries({ queryKey: ['entries'] });
+    },
+  });
+
   const resultText = useMemo(() => {
     if (!mutation.data) return null;
     return `Entradas importadas: ${mutation.data.entriesInserted} • Itens financeiros: ${mutation.data.assetsInserted}`;
@@ -170,7 +182,7 @@ export function ImportarPage() {
     return formatHttpError(exportMutation.error, httpClient.defaults.baseURL);
   }, [exportMutation.error, exportMutation.isError, httpClient.defaults.baseURL]);
 
-  const canInteract = !mutation.isPending && !exportMutation.isPending;
+  const canInteract = !mutation.isPending && !exportMutation.isPending && !clearMutation.isPending;
 
   const pickFile = () => {
     if (!canInteract) return;
@@ -358,6 +370,29 @@ export function ImportarPage() {
             <strong>{resultText}</strong>
           </div>
         ) : null}
+
+        <details style={{ marginTop: 14, opacity: 0.75 }}>
+          <summary style={{ cursor: 'pointer', userSelect: 'none', fontSize: 12 }}>
+            Opções avançadas
+          </summary>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+            <button
+              className="button button--danger button--sm"
+              type="button"
+              onClick={() => {
+                if (!canInteract) return;
+                const ok1 = window.confirm('Deseja apagar toda a base de dados?');
+                if (!ok1) return;
+                const ok2 = window.confirm('Isso é muito perigoso, está ciente?');
+                if (!ok2) return;
+                clearMutation.mutate();
+              }}
+              disabled={!canInteract}
+            >
+              {clearMutation.isPending ? 'Apagando...' : 'Limpar toda a base'}
+            </button>
+          </div>
+        </details>
       </div>
     </div>
   );
