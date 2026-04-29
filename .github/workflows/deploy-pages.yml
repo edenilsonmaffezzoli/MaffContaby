@@ -6,6 +6,11 @@ on:
     paths:
       - "MaffContaby.Web/**"
       - ".github/workflows/deploy-pages.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "MaffContaby.Web/**"
+      - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
 permissions:

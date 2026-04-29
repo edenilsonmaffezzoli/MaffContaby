@@ -6,6 +6,11 @@ on:
     paths:
       - "maffcontaby-worker/**"
       - ".github/workflows/deploy-worker.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "maffcontaby-worker/**"
+      - ".github/workflows/deploy-worker.yml"      
   workflow_dispatch:
 
 jobs:
