@@ -10,7 +10,7 @@ import { getGroups } from '@/services/groups-service';
 import { getPeople } from '@/services/people-service';
 import { competenciaToDateOnly, formatCompetencia, formatCurrencyBRL } from '@/utils/format';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 type Grouped = {
   grupo: string;
@@ -263,6 +263,7 @@ export function MovimentacoesPage() {
       </div>
 
       <NovaMovimentacao
+        key={competencia}
         disabled={createEntryMutation.isPending}
         people={peopleQuery.data ?? []}
         isPeopleLoading={peopleQuery.isLoading}
@@ -414,10 +415,6 @@ function NovaMovimentacao(props: {
   const [grupo, setGrupo] = useState('');
   const [valor, setValor] = useState('');
   const [observacao, setObservacao] = useState('');
-
-  useEffect(() => {
-    setCompetencia(props.defaultCompetencia);
-  }, [props.defaultCompetencia]);
 
   const canSubmit = !props.disabled && personId && competencia.trim() && grupo.trim() && Number(valor) > 0;
 
