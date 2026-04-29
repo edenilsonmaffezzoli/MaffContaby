@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
 function MenuIcon(props: { className?: string }) {
   return (
@@ -63,6 +63,28 @@ function FileTextIcon(props: { className?: string }) {
   );
 }
 
+function TagIcon(props: { className?: string }) {
+  return (
+    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M20 13l-7 7-11-11V2h7l11 11Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon(props: { className?: string }) {
+  return (
+    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function LogoMark() {
   return (
     <svg width="22" height="22" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -76,7 +98,12 @@ function LogoMark() {
 }
 
 export function Layout() {
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const [isCadastroOpen, setIsCadastroOpen] = useState(false);
+
+  const isCadastroRoute = location.pathname.startsWith('/cadastro');
+  const cadastroOpen = isCadastroOpen || isCadastroRoute;
 
   return (
     <div className="shell">
@@ -105,6 +132,45 @@ export function Layout() {
 
           <nav className="sidebar__nav" aria-label="Menu principal">
             <div className="sidebar__section-label">Menu</div>
+
+            <button
+              className={cadastroOpen ? 'sidelink sidelink--active' : 'sidelink'}
+              type="button"
+              aria-expanded={cadastroOpen}
+              onClick={() => setIsCadastroOpen(x => !x)}
+              style={{ background: 'transparent', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}
+            >
+              <TagIcon className="icon-20" />
+              <span style={{ flex: 1 }}>Cadastro</span>
+              <ChevronDownIcon className={cadastroOpen ? 'icon-16 sidebar__chevron sidebar__chevron--open' : 'icon-16 sidebar__chevron'} />
+            </button>
+
+            {cadastroOpen ? (
+              <div className="sidebar__submenu" role="presentation">
+                <NavLink
+                  to="/cadastro/pessoas"
+                  className={({ isActive }) => (isActive ? 'sidelink sidelink--sub sidelink--active' : 'sidelink sidelink--sub')}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <span>Cadastro de Pessoa</span>
+                </NavLink>
+                <NavLink
+                  to="/cadastro/grupos"
+                  className={({ isActive }) => (isActive ? 'sidelink sidelink--sub sidelink--active' : 'sidelink sidelink--sub')}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <span>Cadastro de Grupo</span>
+                </NavLink>
+                <NavLink
+                  to="/cadastro/competencias"
+                  className={({ isActive }) => (isActive ? 'sidelink sidelink--sub sidelink--active' : 'sidelink sidelink--sub')}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <span>Cadastro de Competência</span>
+                </NavLink>
+              </div>
+            ) : null}
+
             <NavLink
               to="/"
               end
@@ -120,7 +186,7 @@ export function Layout() {
               onClick={() => setIsOpen(false)}
             >
               <WalletIcon className="icon-20" />
-              <span>Finanças</span>
+              <span>Investimentos</span>
             </NavLink>
             <NavLink
               to="/relatorios"
