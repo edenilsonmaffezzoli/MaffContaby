@@ -5,7 +5,7 @@ namespace MaffContaby.Api.Data;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    public DbSet<Person> People => Set<Person>();
+    public DbSet<Person> People => Set<Person>(); 
     public DbSet<Entry> Entries => Set<Entry>();
     public DbSet<Asset> Assets => Set<Asset>();
 
