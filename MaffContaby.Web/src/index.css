@@ -228,6 +228,29 @@ h1, h2, h3, h4, h5, h6, .font-display {
   border-radius: 0 3px 3px 0;
 }
 
+.sidebar__submenu {
+  margin: 4px 0 8px;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidelink--sub {
+  padding: 9px 12px;
+  font-size: 13px;
+  opacity: 0.92;
+}
+
+.sidebar__chevron {
+  opacity: 0.9;
+  transition: transform 150ms ease;
+}
+
+.sidebar__chevron--open {
+  transform: rotate(180deg);
+}
+
 .sidebar__footer {
   padding: 16px 22px 20px;
   border-top: 1px solid var(--sidebar-border);
@@ -587,9 +610,32 @@ select.input {
   grid-template-columns: 1fr 70px 150px;
 }
 
+.table__head--mov-person,
+.table__row__summary--mov-person {
+  grid-template-columns: 1fr 90px 150px;
+}
+
 .table__head--fin,
 .table__row--fin {
   grid-template-columns: 1fr 160px 200px;
+}
+
+.table__head--cad,
+.table__row--cad {
+  grid-template-columns: 1fr 220px;
+}
+
+.table__row--cad {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  background: var(--surface);
+  transition: background 150ms ease;
+}
+
+.table__row--cad:hover {
+  background: var(--gray-50);
 }
 
 .table__row {
