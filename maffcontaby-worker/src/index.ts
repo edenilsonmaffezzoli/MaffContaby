@@ -279,7 +279,7 @@ async function buildExecutivoPdf(db: DbSnapshot, params: ReportParams) {
     const tx = bx + barW / 2 - fontBody.widthOfTextAtSize(ml, 9) / 2;
     page.drawText(ml, { x: tx, y: innerY - 10, size: 9, font: fontBody, color: ink });
   }
-  y -= 120 + 14;
+  y -= 120 + 14; 
 
   page.drawText('Top grupos (12 meses)', { x: margin, y: y - 12, size: 12, font: fontH2, color: ink });
   y -= 22;
