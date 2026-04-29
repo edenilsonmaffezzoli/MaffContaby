@@ -50,7 +50,7 @@ function UploadIcon(props: { className?: string }) {
 
 function FileTextIcon(props: { className?: string }) {
   return (
-    <svg  className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M14 2H7a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V8l-6-6Z"
         stroke="currentColor"
@@ -88,11 +88,11 @@ function ChevronDownIcon(props: { className?: string }) {
 function LogoMark() {
   return (
     <svg width="22" height="22" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="32" cy="32" r="28" stroke="rgba(255,255,255,0.9)" strokeWidth="3.5"/>
-      <path d="M18 46V36" stroke="#4CAF50" strokeWidth="4" strokeLinecap="round"/>
-      <path d="M32 46V26" stroke="#4CAF50" strokeWidth="4" strokeLinecap="round"/>
-      <path d="M46 46V18" stroke="#4CAF50" strokeWidth="4" strokeLinecap="round"/>
-      <path d="M15 48H49" stroke="rgba(255,255,255,0.9)" strokeWidth="3.5" strokeLinecap="round"/>
+      <circle cx="32" cy="32" r="28" stroke="rgba(255,255,255,0.9)" strokeWidth="3.5" />
+      <path d="M18 46V36" stroke="var(--brand-aqua)" strokeWidth="4" strokeLinecap="round" />
+      <path d="M32 46V26" stroke="var(--brand-aqua)" strokeWidth="4" strokeLinecap="round" />
+      <path d="M46 46V18" stroke="var(--brand-aqua)" strokeWidth="4" strokeLinecap="round" />
+      <path d="M15 48H49" stroke="rgba(255,255,255,0.9)" strokeWidth="3.5" strokeLinecap="round" />
     </svg>
   );
 }

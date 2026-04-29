@@ -1,22 +1,29 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --primary:        #1A237E;
-  --primary-hover:  #0D1B4D;
-  --primary-light:  rgba(26, 35, 126, 0.08);
-  --primary-mid:    rgba(26, 35, 126, 0.16);
-  --success:        #2E7D32;
-  --success-light:  #E8F5E9;
-  --success-dark:   #1B5E20;
+  --brand-emerald-dark: #006666;
+  --brand-navy:         #003366;
+  --brand-aqua:         #339999;
+  --brand-sky:          #6699CC;
+  --brand-gray-light:   #F0F0F0;
+  --brand-gray-dark:    #333333;
+
+  --primary:        var(--brand-emerald-dark);
+  --primary-hover:  #005555;
+  --primary-light:  rgba(0, 102, 102, 0.08);
+  --primary-mid:    rgba(0, 102, 102, 0.16);
+  --success:        var(--brand-emerald-dark);
+  --success-light:  rgba(0, 102, 102, 0.10);
+  --success-dark:   #005050;
   --danger:         #D32F2F;
   --danger-light:   #FFEBEE;
   --danger-dark:    #B71C1C;
   --warning:        #F57C00;
   --warning-light:  #FFF3E0;
   --warning-dark:   #E65100;
-  --info:           #0288D1;
-  --info-light:     #E3F2FD;
-  --info-dark:      #0D47A1;
+  --info:           var(--brand-sky);
+  --info-light:     rgba(102, 153, 204, 0.16);
+  --info-dark:      var(--brand-navy);
   --slate:          #455A64;
 
   --white:      #FFFFFF;
@@ -31,7 +38,7 @@
   --gray-800:   #1F2937;
   --gray-900:   #111827;
 
-  --sidebar-bg:         #1A237E;
+  --sidebar-bg:         var(--brand-navy);
   --sidebar-bg-hover:   rgba(255,255,255,0.10);
   --sidebar-bg-active:  rgba(255,255,255,0.16);
   --sidebar-text:       rgba(255,255,255,0.85);
@@ -39,11 +46,11 @@
   --sidebar-border:     rgba(255,255,255,0.10);
   --sidebar-width:      260px;
 
-  --bg:       #F4F6FA;
+  --bg:       var(--brand-gray-light);
   --surface:  #FFFFFF;
-  --border:   #E2E5EC;
+  --border:   #E0E0E0;
 
-  --text:     #111827;
+  --text:     var(--brand-gray-dark);
   --muted:    #4B5563;
 
   --shadow-sm:  0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
@@ -56,8 +63,8 @@
   --radius-lg: 14px;
   --radius-xl: 20px;
 
-  --font-display: 'Poppins', system-ui, sans-serif;
-  --font-body:    'DM Sans', system-ui, sans-serif;
+  --font-display: 'Inter', system-ui, sans-serif;
+  --font-body:    'Inter', system-ui, sans-serif;
 
   font-family: var(--font-body);
   font-size: 15px;
@@ -122,8 +129,9 @@ h1, h2, h3, h4, h5, h6, .font-display {
   overflow: hidden;
   flex-shrink: 0;
   background-image:
+    linear-gradient(160deg, var(--brand-emerald-dark) 0%, var(--brand-navy) 100%),
     radial-gradient(ellipse at 0% 0%, rgba(255,255,255,0.06) 0%, transparent 60%),
-    radial-gradient(ellipse at 100% 100%, rgba(46,125,50,0.15) 0%, transparent 60%);
+    radial-gradient(ellipse at 100% 100%, rgba(51,153,153,0.18) 0%, transparent 60%);
 }
 
 .sidebar__inner {
@@ -298,7 +306,7 @@ h1, h2, h3, h4, h5, h6, .font-display {
   position: sticky;
   top: 0;
   z-index: 40;
-  box-shadow: 0 2px 8px rgba(26,35,126,0.3);
+  box-shadow: 0 2px 10px rgba(0,51,102,0.24);
 }
 
 .topbar__title {
