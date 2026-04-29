@@ -5,6 +5,16 @@ type PersonDto = {
   name: string;
 };
 
+type GroupDto = {
+  id: string;
+  name: string;
+};
+
+type CompetenciaDto = {
+  id: string;
+  value: string;
+};
+
 type AssetDto = {
   id: string;
   name: string;
@@ -28,6 +38,8 @@ type DbSnapshot = {
   version: 1;
   updatedAt: string;
   people: PersonDto[];
+  groups: GroupDto[];
+  competencias: CompetenciaDto[];
   assets: AssetDto[];
   entries: EntryDto[];
 };
@@ -407,7 +419,59 @@ async function buildDetalhadoPdf(db: DbSnapshot, params: ReportParams) {
 async function readDb(env: Env): Promise<DbSnapshot> {
   const stored = (await env.MAFF_KV.get(DB_KEY, { type: 'json' })) as DbSnapshot | null;
   if (stored && stored.version === 1) {
-    const anyStored = stored as unknown as { entries?: unknown };
+    const anyStored = stored as unknown as {
+      people?: unknown;
+      groups?: unknown;
+      competencias?: unknown;
+      assets?: unknown;
+      entries?: unknown;
+    };
+
+    const people: DbSnapshot['people'] = Array.isArray(anyStored.people)
+      ? (anyStored.people as unknown[]).map(p => {
+          const x = p as { id?: unknown; name?: unknown };
+          return {
+            id: typeof x.id === 'string' && x.id.trim() ? x.id.trim() : crypto.randomUUID(),
+            name: typeof x.name === 'string' ? x.name : '',
+          };
+        }).filter(p => p.name.trim())
+      : [];
+
+    const groups: DbSnapshot['groups'] = Array.isArray(anyStored.groups)
+      ? (anyStored.groups as unknown[]).map(g => {
+          const x = g as { id?: unknown; name?: unknown };
+          return {
+            id: typeof x.id === 'string' && x.id.trim() ? x.id.trim() : crypto.randomUUID(),
+            name: typeof x.name === 'string' ? x.name : '',
+          };
+        }).filter(g => g.name.trim())
+      : [];
+
+    const competencias: DbSnapshot['competencias'] = Array.isArray(anyStored.competencias)
+      ? (anyStored.competencias as unknown[]).map(c => {
+          const x = c as { id?: unknown; value?: unknown };
+          const value = typeof x.value === 'string' ? normalizeCompetencia(x.value) : '';
+          return {
+            id: typeof x.id === 'string' && x.id.trim() ? x.id.trim() : crypto.randomUUID(),
+            value,
+          };
+        }).filter(c => c.value.trim())
+      : [];
+
+    const assets: DbSnapshot['assets'] = Array.isArray(anyStored.assets)
+      ? (anyStored.assets as unknown[]).map(a => {
+          const x = a as Partial<AssetDto>;
+          return {
+            id: typeof x.id === 'string' && x.id.trim() ? x.id.trim() : crypto.randomUUID(),
+            name: typeof x.name === 'string' ? x.name : '',
+            saldo: typeof x.saldo === 'number' && Number.isFinite(x.saldo) ? x.saldo : 0,
+            disponivelImediatamente: Boolean(x.disponivelImediatamente ?? true),
+            asOfDate: typeof x.asOfDate === 'string' ? x.asOfDate : null,
+            observacao: typeof x.observacao === 'string' ? x.observacao : null,
+          };
+        }).filter(a => a.name.trim())
+      : [];
+
     const rawEntries = Array.isArray(anyStored.entries) ? (anyStored.entries as unknown[]) : [];
     const entries: DbSnapshot['entries'] = rawEntries
       .map(raw => {
@@ -445,19 +509,29 @@ async function readDb(env: Env): Promise<DbSnapshot> {
       })
       .filter(e => e.personId && e.competencia && e.grupo);
 
-    return { ...stored, entries };
+    return { version: 1, updatedAt: stored.updatedAt, people, groups, competencias, assets, entries };
   }
   return {
     version: 1,
     updatedAt: new Date().toISOString(),
     people: [],
+    groups: [],
+    competencias: [],
     assets: [],
     entries: [],
   };
 }
 
 async function writeDb(env: Env, db: DbSnapshot) {
-  const payload: DbSnapshot = { ...db, version: 1, updatedAt: new Date().toISOString() };
+  const payload: DbSnapshot = {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    people: db.people ?? [],
+    groups: db.groups ?? [],
+    competencias: db.competencias ?? [],
+    assets: db.assets ?? [],
+    entries: db.entries ?? [],
+  };
   await env.MAFF_KV.put(DB_KEY, JSON.stringify(payload));
   return payload;
 }
@@ -479,8 +553,13 @@ function methodNotAllowed() {
 }
 
 function assertWriteAuthorized(request: Request, env: Env) {
+  const url = new URL(request.url);
   const expected = env.WRITE_KEY?.trim();
-  if (!expected) return { ok: false as const, response: text('WRITE_KEY não configurada no Worker', { status: 500 }) };
+  if (!expected) {
+    const isLocal = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
+    if (isLocal) return { ok: true as const };
+    return { ok: false as const, response: text('WRITE_KEY não configurada no Worker', { status: 500 }) };
+  }
   const got = getWriteKeyFromRequest(request);
   if (!got || got !== expected) return { ok: false as const, response: unauthorized() };
   return { ok: true as const };
@@ -517,6 +596,8 @@ export default {
           version: 1,
           updatedAt: new Date().toISOString(),
           people: [],
+          groups: [],
+          competencias: [],
           assets: [],
           entries: [],
         };
@@ -536,6 +617,7 @@ export default {
         const body = (await request.json().catch(() => null)) as { name?: string } | null;
         const name = body?.name?.trim();
         if (!name) return withCors(badRequest('name obrigatório'));
+        if (name.length > 150) return withCors(badRequest('name deve ter no máximo 150 caracteres'));
 
         const exists = db.people.some(p => p.name.toLowerCase() === name.toLowerCase());
         if (exists) return withCors(badRequest('Pessoa já existe'));
@@ -544,6 +626,130 @@ export default {
         db.people.push(person);
         await writeDb(env, db);
         return withCors(json(person, { status: 201 }));
+      }
+
+      return withCors(methodNotAllowed());
+    }
+
+    if (path.startsWith('/api/people/')) {
+      const id = path.slice('/api/people/'.length);
+      if (!id) return withCors(notFound());
+      const db = await readDb(env);
+      const idx = db.people.findIndex(p => p.id === id);
+      if (idx < 0) return withCors(notFound());
+
+      if (method === 'PUT') {
+        const body = (await request.json().catch(() => null)) as { name?: string } | null;
+        const name = body?.name?.trim();
+        if (!name) return withCors(badRequest('name obrigatório'));
+        if (name.length > 150) return withCors(badRequest('name deve ter no máximo 150 caracteres'));
+
+        const exists = db.people.some(p => p.id !== id && p.name.toLowerCase() === name.toLowerCase());
+        if (exists) return withCors(badRequest('Pessoa já existe'));
+
+        db.people[idx] = { ...db.people[idx], name };
+        await writeDb(env, db);
+        return withCors(text('', { status: 204 }));
+      }
+
+      if (method === 'DELETE') {
+        db.people.splice(idx, 1);
+        db.entries = db.entries.filter(e => e.personId !== id);
+        await writeDb(env, db);
+        return withCors(text('', { status: 204 }));
+      }
+
+      return withCors(methodNotAllowed());
+    }
+
+    if (path === '/api/groups') {
+      const db = await readDb(env);
+
+      if (method === 'GET') return withCors(json(db.groups));
+
+      if (method === 'POST') {
+        const body = (await request.json().catch(() => null)) as { name?: string } | null;
+        const name = body?.name?.trim();
+        if (!name) return withCors(badRequest('name obrigatório'));
+        if (name.length > 50) return withCors(badRequest('name deve ter no máximo 50 caracteres'));
+
+        const exists = db.groups.some(g => g.name.toLowerCase() === name.toLowerCase());
+        if (exists) return withCors(badRequest('Grupo já existe'));
+
+        const group: GroupDto = { id: crypto.randomUUID(), name };
+        db.groups.push(group);
+        await writeDb(env, db);
+        return withCors(json(group, { status: 201 }));
+      }
+
+      return withCors(methodNotAllowed());
+    }
+
+    if (path.startsWith('/api/groups/')) {
+      const id = path.slice('/api/groups/'.length);
+      if (!id) return withCors(notFound());
+      const db = await readDb(env);
+      const idx = db.groups.findIndex(g => g.id === id);
+      if (idx < 0) return withCors(notFound());
+
+      if (method === 'PUT') {
+        const body = (await request.json().catch(() => null)) as { name?: string } | null;
+        const name = body?.name?.trim();
+        if (!name) return withCors(badRequest('name obrigatório'));
+        if (name.length > 50) return withCors(badRequest('name deve ter no máximo 50 caracteres'));
+
+        const exists = db.groups.some(g => g.id !== id && g.name.toLowerCase() === name.toLowerCase());
+        if (exists) return withCors(badRequest('Grupo já existe'));
+
+        db.groups[idx] = { ...db.groups[idx], name };
+        await writeDb(env, db);
+        return withCors(text('', { status: 204 }));
+      }
+
+      if (method === 'DELETE') {
+        db.groups.splice(idx, 1);
+        await writeDb(env, db);
+        return withCors(text('', { status: 204 }));
+      }
+
+      return withCors(methodNotAllowed());
+    }
+
+    if (path === '/api/competencias') {
+      const db = await readDb(env);
+
+      if (method === 'GET') return withCors(json(db.competencias));
+
+      if (method === 'POST') {
+        const body = (await request.json().catch(() => null)) as { value?: string } | null;
+        const valueRaw = body?.value?.trim();
+        if (!valueRaw) return withCors(badRequest('value obrigatório'));
+        if (!/^\d{4}-\d{2}(-\d{2})?$/.test(valueRaw)) return withCors(badRequest('value inválido'));
+
+        const value = normalizeCompetencia(valueRaw);
+        const exists = db.competencias.some(c => c.value.slice(0, 7) === value.slice(0, 7));
+        if (exists) return withCors(badRequest('Competência já existe'));
+
+        const item: CompetenciaDto = { id: crypto.randomUUID(), value };
+        db.competencias.push(item);
+        await writeDb(env, db);
+        return withCors(json(item, { status: 201 }));
+      }
+
+      return withCors(methodNotAllowed());
+    }
+
+    if (path.startsWith('/api/competencias/')) {
+      const id = path.slice('/api/competencias/'.length);
+      if (!id) return withCors(notFound());
+      const db = await readDb(env);
+      const idx = db.competencias.findIndex(c => c.id === id);
+      if (idx < 0) return withCors(notFound());
+
+      if (method === 'DELETE') {
+        db.competencias.splice(idx, 1);
+        await writeDb(env, db);
+        return withCors(text('', { status: 204 }));
       }
 
       return withCors(methodNotAllowed());
@@ -616,13 +822,11 @@ export default {
 
       if (method === 'GET') {
         const personId = url.searchParams.get('personId')?.trim() ?? '';
-        if (!personId) return withCors(badRequest('personId obrigatório'));
-
         const competenciaParam = url.searchParams.get('competencia')?.trim();
-        const list = db.entries.filter(e => e.personId === personId);
-        const filtered = competenciaParam
-          ? list.filter(e => e.competencia.slice(0, 7) === competenciaParam)
-          : list;
+        const grupoParam = url.searchParams.get('grupo')?.trim();
+        const list = personId ? db.entries.filter(e => e.personId === personId) : db.entries.slice();
+        let filtered = competenciaParam ? list.filter(e => e.competencia.slice(0, 7) === competenciaParam) : list;
+        if (grupoParam) filtered = filtered.filter(e => e.grupo === grupoParam);
         return withCors(json(filtered));
       }
 
@@ -714,7 +918,21 @@ export default {
       const body = (await request.json().catch(() => null)) as DbSnapshot | null;
       if (!body || body.version !== 1) return withCors(badRequest('Snapshot inválido'));
 
-      const saved = await writeDb(env, body);
+      const groups =
+        Array.isArray(body.groups) && body.groups.length
+          ? body.groups
+          : [...new Set((body.entries ?? []).map(e => e.grupo.trim()).filter(Boolean))]
+              .sort((a, b) => a.localeCompare(b))
+              .map(name => ({ id: crypto.randomUUID(), name }));
+
+      const competencias =
+        Array.isArray(body.competencias) && body.competencias.length
+          ? body.competencias
+          : [...new Set((body.entries ?? []).map(e => normalizeCompetencia(e.competencia).slice(0, 7)).filter(Boolean))]
+              .sort()
+              .map(m => ({ id: crypto.randomUUID(), value: `${m}-01` }));
+
+      const saved = await writeDb(env, { ...body, groups, competencias });
       const result: ImportResult = { entriesInserted: saved.entries.length, assetsInserted: saved.assets.length };
       return withCors(json(result));
     }

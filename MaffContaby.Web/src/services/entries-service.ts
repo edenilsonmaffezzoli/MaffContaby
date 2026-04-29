@@ -29,9 +29,14 @@ export interface UpdateEntryRequest {
 
 export async function getEntries(
   httpClient: AxiosInstance,
-  params: { personId: string; competencia?: string }
+  params: { personId?: string; competencia?: string; grupo?: string }
 ) {
-  const { data } = await httpClient.get<EntryDto[]>('/api/entries', { params });
+  const queryParams: Record<string, string> = {};
+  if (params.personId) queryParams.personId = params.personId;
+  if (params.competencia) queryParams.competencia = params.competencia;
+  if (params.grupo) queryParams.grupo = params.grupo;
+
+  const { data } = await httpClient.get<EntryDto[]>('/api/entries', { params: queryParams });
   return data;
 }
 
