@@ -1,5 +1,8 @@
+import { useHttpClient } from '@/hooks/use-http-client';
+import { logout, me } from '@/services/auth-service';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 function MenuIcon(props: { className?: string }) {
   return (
@@ -119,12 +122,24 @@ function LogoMark() {
 
 export function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const httpClient = useHttpClient();
   const [isOpen, setIsOpen] = useState(false);
   const [isCadastroOpen, setIsCadastroOpen] = useState(false);
 
   const isCadastroRoute = location.pathname.startsWith('/cadastro');
   const cadastroOpen = isCadastroOpen || isCadastroRoute;
   const isGdpRoute = location.pathname.startsWith('/gdp');
+  const token = localStorage.getItem('gdp_token')?.trim() ?? '';
+
+  const meQuery = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: () => me(httpClient),
+    enabled: Boolean(token),
+    retry: false,
+  });
+
+  const user = meQuery.data?.user ?? null;
 
   return (
     <div className="shell">
@@ -244,6 +259,27 @@ export function Layout() {
           </nav>
 
           <div className="sidebar__footer">
+            {user ? (
+              <div className="sidebar__user">
+                <div className="sidebar__user-label">Logado:</div>
+                <div className="sidebar__user-name">{user.username}{user.admin ? ' (admin)' : ''}</div>
+                <button
+                  className="button button--ghost button--sm"
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await logout(httpClient);
+                    } catch {
+                    }
+                    localStorage.removeItem('gdp_token');
+                    localStorage.removeItem('gdp_admin_user');
+                    navigate('/login', { replace: true });
+                  }}
+                >
+                  Sair
+                </button>
+              </div>
+            ) : null}
             <div>© 2026 MaffContaby</div>
             <div>Versão Web</div>
           </div>

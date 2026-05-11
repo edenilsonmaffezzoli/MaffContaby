@@ -260,7 +260,7 @@
     pendingUploadTimer = setTimeout(async () => {
       pendingUploadTimer = null;
       try {
-        await putStore({ userId: activeUserId, store });
+        await putStore({ userId: storeUserIdParam(), store });
       } catch {
       }
     }, 700);
@@ -283,12 +283,16 @@
     return new Date(base.getFullYear(), base.getMonth() + delta, 1);
   }
 
-  function setTheme(theme) {
+  function applyTheme(theme) {
     document.documentElement.dataset.theme = theme;
-    store.theme = theme;
-    if (currentCacheKey) saveStore(currentCacheKey);
     el.btnTema.textContent = theme === "light" ? "Escuro" : "Claro";
     el.btnTema.title = theme === "light" ? "Mudar para tema escuro" : "Mudar para tema claro";
+  }
+
+  function setTheme(theme) {
+    applyTheme(theme);
+    store.theme = theme;
+    if (currentCacheKey) saveStore(currentCacheKey);
   }
 
   function openModal({ dateKey, record }) {
@@ -973,10 +977,12 @@
     try {
       const remote = await fetchStore({ userId: storeUserIdParam() });
       if (!remote) return;
-      if (String(remote.updatedAt || "") > String(store.updatedAt || "")) {
+      const localHasAny = Object.keys(store.records || {}).length > 0;
+      const remoteHasAny = Object.keys(remote.records || {}).length > 0;
+      if ((!localHasAny && remoteHasAny) || String(remote.updatedAt || "") > String(store.updatedAt || "")) {
         store = remote;
         saveStore(currentCacheKey, { upload: false });
-        setTheme(store.theme);
+        applyTheme(store.theme);
         render();
       }
     } catch {
@@ -987,7 +993,7 @@
     activeUserId = userId;
     currentCacheKey = cacheKeyFor(userId);
     store = loadStore(currentCacheKey);
-    setTheme(store.theme);
+    applyTheme(store.theme);
     render();
     await refreshFromRemote();
   }
