@@ -49,12 +49,35 @@ type ImportResult = {
   assetsInserted: number;
 };
 
+type GdpRecord = {
+  id: string;
+  atividade: string;
+  descricao: string;
+  inicio: string;
+  fim: string;
+  totalMin: number;
+  observacao: string;
+  criadoEm: string;
+  atualizadoEm: string;
+};
+
+type GdpStore = {
+  version: 1;
+  theme: 'light' | 'dark';
+  records: Record<string, GdpRecord[]>;
+  updatedAt: string;
+};
+
 interface Env {
   MAFF_KV: KVNamespace;
   WRITE_KEY?: string;
 }
 
 const DB_KEY = 'db';
+const GDP_PREFIX = 'gdp:';
+const GDP_USERS_KEY = `${GDP_PREFIX}users`;
+const GDP_SESSION_PREFIX = `${GDP_PREFIX}session:`;
+const GDP_STORE_PREFIX = `${GDP_PREFIX}store:`;
 
 type ReportParams = {
   personId: string | null;
@@ -548,8 +571,138 @@ function unauthorized() {
   return text('Unauthorized', { status: 401 });
 }
 
+function forbidden() {
+  return text('Forbidden', { status: 403 });
+}
+
 function methodNotAllowed() {
   return text('Method not allowed', { status: 405 });
+}
+
+function isValidKvKey(key: string) {
+  if (!key) return false;
+  if (key.length > 80) return false;
+  return /^[a-zA-Z0-9._-]+$/.test(key);
+}
+
+function isValidGdpStore(store: unknown): store is GdpStore {
+  if (!store || typeof store !== 'object') return false;
+  const s = store as Partial<GdpStore>;
+  if (s.version !== 1) return false;
+  if (s.theme !== 'light' && s.theme !== 'dark') return false;
+  if (!s.records || typeof s.records !== 'object') return false;
+  if (typeof s.updatedAt !== 'string') return false;
+  return true;
+}
+
+type PasswordHash = {
+  saltB64: string;
+  iterations: number;
+  hashB64: string;
+};
+
+type GdpUser = {
+  id: string;
+  username: string;
+  admin: boolean;
+  password: PasswordHash;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type GdpUsersSnapshot = {
+  version: 1;
+  updatedAt: string;
+  users: GdpUser[];
+};
+
+type GdpSession = {
+  token: string;
+  userId: string;
+  createdAt: string;
+};
+
+function trimLower(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function b64Encode(bytes: ArrayBuffer) {
+  let binary = '';
+  const arr = new Uint8Array(bytes);
+  for (let i = 0; i < arr.length; i++) binary += String.fromCharCode(arr[i]);
+  return btoa(binary);
+}
+
+function b64Decode(b64: string) {
+  const binary = atob(b64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out.buffer;
+}
+
+async function pbkdf2Hash(password: string, saltB64: string, iterations: number) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      hash: 'SHA-256',
+      salt: b64Decode(saltB64),
+      iterations,
+    },
+    keyMaterial,
+    256,
+  );
+  return b64Encode(bits);
+}
+
+function timingSafeEqual(aB64: string, bB64: string) {
+  if (aB64.length !== bB64.length) return false;
+  let out = 0;
+  for (let i = 0; i < aB64.length; i++) out |= aB64.charCodeAt(i) ^ bB64.charCodeAt(i);
+  return out === 0;
+}
+
+async function hashPassword(password: string): Promise<PasswordHash> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const saltB64 = b64Encode(salt.buffer);
+  const iterations = 200_000;
+  const hashB64 = await pbkdf2Hash(password, saltB64, iterations);
+  return { saltB64, iterations, hashB64 };
+}
+
+async function verifyPassword(password: string, stored: PasswordHash) {
+  const got = await pbkdf2Hash(password, stored.saltB64, stored.iterations);
+  return timingSafeEqual(got, stored.hashB64);
+}
+
+async function readGdpUsers(env: Env): Promise<GdpUsersSnapshot> {
+  const snap = (await env.MAFF_KV.get(GDP_USERS_KEY, { type: 'json' })) as GdpUsersSnapshot | null;
+  if (snap && snap.version === 1 && Array.isArray(snap.users)) return snap;
+  return { version: 1, updatedAt: new Date().toISOString(), users: [] };
+}
+
+async function writeGdpUsers(env: Env, snap: GdpUsersSnapshot) {
+  const payload: GdpUsersSnapshot = { version: 1, updatedAt: new Date().toISOString(), users: snap.users ?? [] };
+  await env.MAFF_KV.put(GDP_USERS_KEY, JSON.stringify(payload));
+  return payload;
+}
+
+function getBearerToken(request: Request) {
+  const auth = request.headers.get('authorization')?.trim() ?? '';
+  if (!auth.toLowerCase().startsWith('bearer ')) return '';
+  return auth.slice(7).trim();
+}
+
+async function requireSession(request: Request, env: Env) {
+  const token = getBearerToken(request);
+  if (!token) return { ok: false as const, response: unauthorized() };
+  const session = (await env.MAFF_KV.get(`${GDP_SESSION_PREFIX}${token}`, { type: 'json' })) as GdpSession | null;
+  if (!session || session.token !== token || !session.userId) return { ok: false as const, response: unauthorized() };
+  const users = await readGdpUsers(env);
+  const user = users.users.find(u => u.id === session.userId);
+  if (!user) return { ok: false as const, response: unauthorized() };
+  return { ok: true as const, user };
 }
 
 function assertWriteAuthorized(request: Request, env: Env) {
@@ -573,9 +726,78 @@ export default {
 
     if (method === 'OPTIONS') return withCors(text('', { status: 204 }));
 
-    if (isWriteMethod(method)) {
+    if (isWriteMethod(method) && !path.startsWith('/api/auth') && !path.startsWith('/api/gdp')) {
       const auth = assertWriteAuthorized(request, env);
       if (!auth.ok) return withCors(auth.response);
+    }
+
+    if (path === '/api/auth/bootstrap') {
+      const users = await readGdpUsers(env);
+      const hasAny = users.users.length > 0;
+
+      if (method === 'GET') return withCors(json({ ok: true, needed: !hasAny }));
+
+      if (method === 'POST') {
+        if (hasAny) return withCors(badRequest('Bootstrap já concluído'));
+        const body = (await request.json().catch(() => null)) as { username?: string; password?: string } | null;
+        const username = body?.username?.trim() ?? '';
+        const password = body?.password ?? '';
+        if (trimLower(username) !== 'admin') return withCors(badRequest('username deve ser "admin"'));
+        if (typeof password !== 'string' || password.length < 8) return withCors(badRequest('password inválida'));
+
+        const now = new Date().toISOString();
+        const user: GdpUser = {
+          id: crypto.randomUUID(),
+          username: 'admin',
+          admin: true,
+          password: await hashPassword(password),
+          createdAt: now,
+          updatedAt: now,
+        };
+        await writeGdpUsers(env, { ...users, users: [user] });
+        return withCors(json({ ok: true }));
+      }
+
+      return withCors(methodNotAllowed());
+    }
+
+    if (path === '/api/auth/login') {
+      if (method !== 'POST') return withCors(methodNotAllowed());
+      const body = (await request.json().catch(() => null)) as { username?: string; password?: string } | null;
+      const username = body?.username?.trim() ?? '';
+      const password = body?.password ?? '';
+      if (!username || typeof password !== 'string') return withCors(badRequest('Credenciais inválidas'));
+
+      const users = await readGdpUsers(env);
+      const user = users.users.find(u => trimLower(u.username) === trimLower(username));
+      if (!user) return withCors(unauthorized());
+      const ok = await verifyPassword(password, user.password);
+      if (!ok) return withCors(unauthorized());
+
+      const token = crypto.randomUUID();
+      const session: GdpSession = { token, userId: user.id, createdAt: new Date().toISOString() };
+      await env.MAFF_KV.put(`${GDP_SESSION_PREFIX}${token}`, JSON.stringify(session), { expirationTtl: 60 * 60 * 24 * 30 });
+      return withCors(
+        json({
+          ok: true,
+          token,
+          user: { id: user.id, username: user.username, admin: user.admin },
+        }),
+      );
+    }
+
+    if (path === '/api/auth/me') {
+      if (method !== 'GET') return withCors(methodNotAllowed());
+      const auth = await requireSession(request, env);
+      if (!auth.ok) return withCors(auth.response);
+      return withCors(json({ ok: true, user: { id: auth.user.id, username: auth.user.username, admin: auth.user.admin } }));
+    }
+
+    if (path === '/api/auth/logout') {
+      if (method !== 'POST') return withCors(methodNotAllowed());
+      const token = getBearerToken(request);
+      if (token) await env.MAFF_KV.delete(`${GDP_SESSION_PREFIX}${token}`);
+      return withCors(json({ ok: true }));
     }
 
     if (path === '/api/db') {
@@ -603,6 +825,126 @@ export default {
         };
         await writeDb(env, cleared);
         return withCors(text('', { status: 204 }));
+      }
+
+      return withCors(methodNotAllowed());
+    }
+
+    if (path === '/api/gdp/users') {
+      const auth = await requireSession(request, env);
+      if (!auth.ok) return withCors(auth.response);
+      if (!auth.user.admin) return withCors(forbidden());
+
+      const users = await readGdpUsers(env);
+
+      if (method === 'GET') {
+        return withCors(
+          json({
+            ok: true,
+            users: users.users
+              .slice()
+              .sort((a, b) => a.username.localeCompare(b.username))
+              .map(u => ({ id: u.id, username: u.username, admin: u.admin, createdAt: u.createdAt, updatedAt: u.updatedAt })),
+          }),
+        );
+      }
+
+      if (method === 'POST') {
+        const body = (await request.json().catch(() => null)) as { username?: string; password?: string; admin?: boolean } | null;
+        const username = body?.username?.trim() ?? '';
+        const password = body?.password ?? '';
+        const admin = Boolean(body?.admin);
+        if (!username) return withCors(badRequest('username obrigatório'));
+        if (username.length > 60) return withCors(badRequest('username muito longo'));
+        if (typeof password !== 'string' || password.length < 6) return withCors(badRequest('password inválida'));
+        const exists = users.users.some(u => trimLower(u.username) === trimLower(username));
+        if (exists) return withCors(badRequest('username já existe'));
+
+        const now = new Date().toISOString();
+        const user: GdpUser = {
+          id: crypto.randomUUID(),
+          username,
+          admin,
+          password: await hashPassword(password),
+          createdAt: now,
+          updatedAt: now,
+        };
+        users.users.push(user);
+        await writeGdpUsers(env, users);
+        return withCors(json({ ok: true, user: { id: user.id, username: user.username, admin: user.admin } }, { status: 201 }));
+      }
+
+      return withCors(methodNotAllowed());
+    }
+
+    if (path.startsWith('/api/gdp/users/')) {
+      const auth = await requireSession(request, env);
+      if (!auth.ok) return withCors(auth.response);
+      if (!auth.user.admin) return withCors(forbidden());
+
+      const id = path.slice('/api/gdp/users/'.length);
+      if (!id) return withCors(notFound());
+      const users = await readGdpUsers(env);
+      const idx = users.users.findIndex(u => u.id === id);
+      if (idx < 0) return withCors(notFound());
+
+      if (method === 'PUT') {
+        const body = (await request.json().catch(() => null)) as { username?: string; password?: string; admin?: boolean } | null;
+        const nextUsername = body?.username?.trim();
+        const nextPassword = body?.password;
+        const nextAdmin = body?.admin;
+
+        if (typeof nextUsername === 'string') {
+          if (!nextUsername) return withCors(badRequest('username obrigatório'));
+          if (nextUsername.length > 60) return withCors(badRequest('username muito longo'));
+          const exists = users.users.some(u => u.id !== id && trimLower(u.username) === trimLower(nextUsername));
+          if (exists) return withCors(badRequest('username já existe'));
+          users.users[idx].username = nextUsername;
+        }
+
+        if (typeof nextAdmin === 'boolean') users.users[idx].admin = nextAdmin;
+
+        if (typeof nextPassword === 'string') {
+          if (nextPassword.length < 6) return withCors(badRequest('password inválida'));
+          users.users[idx].password = await hashPassword(nextPassword);
+        }
+
+        users.users[idx].updatedAt = new Date().toISOString();
+        await writeGdpUsers(env, users);
+        return withCors(text('', { status: 204 }));
+      }
+
+      if (method === 'DELETE') {
+        if (auth.user.id === id) return withCors(badRequest('Não é possível excluir o próprio usuário'));
+        users.users.splice(idx, 1);
+        await writeGdpUsers(env, users);
+        return withCors(text('', { status: 204 }));
+      }
+
+      return withCors(methodNotAllowed());
+    }
+
+    if (path === '/api/gdp/store') {
+      const auth = await requireSession(request, env);
+      if (!auth.ok) return withCors(auth.response);
+
+      const rawUserId = (url.searchParams.get('userId') ?? '').trim();
+      const userId = auth.user.admin && rawUserId ? rawUserId : auth.user.id;
+      if (!userId) return withCors(badRequest('userId inválido'));
+
+      const kvKey = `${GDP_STORE_PREFIX}${userId}`;
+
+      if (method === 'GET') {
+        const store = (await env.MAFF_KV.get(kvKey, { type: 'json' })) as GdpStore | null;
+        return withCors(json({ ok: true, store: store ?? null }));
+      }
+
+      if (method === 'PUT') {
+        const body = (await request.json().catch(() => null)) as { store?: unknown } | null;
+        const store = body?.store;
+        if (!isValidGdpStore(store)) return withCors(badRequest('store inválido'));
+        await env.MAFF_KV.put(kvKey, JSON.stringify(store));
+        return withCors(json({ ok: true }));
       }
 
       return withCors(methodNotAllowed());

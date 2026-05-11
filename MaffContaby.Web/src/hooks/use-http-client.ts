@@ -13,6 +13,17 @@ export function useHttpClient() {
     client.interceptors.request.use(config => {
       const method = (config.method ?? 'get').toLowerCase();
       const isWrite = method === 'post' || method === 'put' || method === 'patch' || method === 'delete';
+      const url = String(config.url ?? '');
+
+      if (url.startsWith('/api/auth') || url.startsWith('/api/gdp')) {
+        const token = localStorage.getItem('gdp_token')?.trim() ?? '';
+        if (token) {
+          config.headers = config.headers ?? {};
+          (config.headers as Record<string, string>)['authorization'] = `Bearer ${token}`;
+        }
+        return config;
+      }
+
       if (!isWrite) return config;
 
       const envKey = (import.meta.env.VITE_WRITE_KEY as string | undefined)?.trim();

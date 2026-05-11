@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GDP — Registro Diário</title>
+    <meta name="color-scheme" content="light dark" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">GDP</div>
+        <div class="brand-text">
+          <div class="brand-title">Registro Diário</div>
+          <div class="brand-subtitle">Atividades com controle de tempo</div>
+        </div>
+      </div>
+
+      <div class="toolbar" aria-label="Ações">
+        <button id="btnHoje" class="btn" type="button" title="Ir para o mês atual">Hoje</button>
+        <button id="btnTema" class="btn" type="button" title="Alternar tema">Tema</button>
+        <button id="btnExportarExcel" class="btn" type="button" title="Exportar o mês atual para Excel (CSV)">Excel (mês)</button>
+        <button id="btnPdfMes" class="btn" type="button" title="Gerar PDF do mês atual">PDF (mês)</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="monthbar" aria-label="Navegação do mês">
+        <div class="monthnav">
+          <button id="btnMesAnterior" class="btn icon" type="button" aria-label="Mês anterior">‹</button>
+          <h1 id="tituloMes" class="month-title">—</h1>
+          <button id="btnMesProximo" class="btn icon" type="button" aria-label="Próximo mês">›</button>
+        </div>
+        <div class="monthmeta">
+          <div id="resumoMes" class="muted">—</div>
+        </div>
+      </section>
+
+      <section class="calendar" aria-label="Calendário mensal">
+        <div class="weekdays" aria-hidden="true">
+          <div>Seg</div>
+          <div>Ter</div>
+          <div>Qua</div>
+          <div>Qui</div>
+          <div>Sex</div>
+          <div>Sáb</div>
+          <div>Dom</div>
+        </div>
+        <div id="gridDias" class="days-grid" role="grid" aria-label="Dias do mês"></div>
+      </section>
+    </main>
+
+    <div id="modal" class="modal" aria-hidden="true">
+      <div class="modal-backdrop" data-close="true"></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitulo">
+        <div class="modal-header">
+          <div>
+            <div id="modalTitulo" class="modal-title">Novo registro</div>
+            <div id="modalSubtitulo" class="modal-subtitle muted">—</div>
+          </div>
+          <button id="btnFecharModal" class="btn icon" type="button" aria-label="Fechar">×</button>
+        </div>
+
+        <form id="formRegistro" class="form">
+          <input id="registroId" type="hidden" />
+          <input id="registroData" type="hidden" />
+
+          <div class="field">
+            <label for="atividade">Atividade</label>
+            <input id="atividade" name="atividade" type="text" required autocomplete="off" placeholder="Ex.: Reunião, Estudo, Treino..." />
+          </div>
+
+          <div class="field">
+            <label for="descricao">Descrição</label>
+            <textarea id="descricao" name="descricao" rows="3" placeholder="Opcional. Resumo do que foi feito."></textarea>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label for="inicio">Início</label>
+              <input id="inicio" name="inicio" type="time" required />
+            </div>
+            <div class="field">
+              <label for="fim">Fim</label>
+              <input id="fim" name="fim" type="time" required />
+            </div>
+            <div class="field">
+              <label for="total">Total</label>
+              <input id="total" name="total" type="text" readonly />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="observacao">Observação</label>
+            <textarea id="observacao" name="observacao" rows="6" maxlength="10000" placeholder="Espaço para anotações (até 10.000 caracteres)."></textarea>
+            <div class="hint">
+              <span id="contagemObs">0</span>/10000
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button id="btnExcluir" class="btn danger" type="button" hidden>Excluir</button>
+            <div class="spacer"></div>
+            <button id="btnCancelar" class="btn ghost" type="button">Cancelar</button>
+            <button id="btnSalvar" class="btn primary" type="submit">Salvar</button>
+          </div>
+
+          <div id="erroForm" class="form-error" role="status" aria-live="polite"></div>
+        </form>
+      </div>
+    </div>
+
+    <template id="tplAtividade">
+      <div class="activity">
+        <button class="activity-main" type="button">
+          <span class="activity-name"></span>
+          <span class="activity-time"></span>
+        </button>
+        <button class="btn icon small activity-del" type="button" title="Excluir" aria-label="Excluir">🗑</button>
+      </div>
+    </template>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

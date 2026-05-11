@@ -48,6 +48,26 @@ function UploadIcon(props: { className?: string }) {
   );
 }
 
+function ClockIcon(props: { className?: string }) {
+  return (
+    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 7v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function UsersIcon(props: { className?: string }) {
+  return (
+    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" strokeWidth="2" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function FileTextIcon(props: { className?: string }) {
   return (
     <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -104,6 +124,7 @@ export function Layout() {
 
   const isCadastroRoute = location.pathname.startsWith('/cadastro');
   const cadastroOpen = isCadastroOpen || isCadastroRoute;
+  const isGdpRoute = location.pathname.startsWith('/gdp');
 
   return (
     <div className="shell">
@@ -204,6 +225,22 @@ export function Layout() {
               <UploadIcon className="icon-20" />
               <span>Importar</span>
             </NavLink>
+            <NavLink
+              to="/gdp"
+              className={({ isActive }) => (isActive ? 'sidelink sidelink--active' : 'sidelink')}
+              onClick={() => setIsOpen(false)}
+            >
+              <ClockIcon className="icon-20" />
+              <span>Horários</span>
+            </NavLink>
+            <NavLink
+              to="/usuarios"
+              className={({ isActive }) => (isActive ? 'sidelink sidelink--active' : 'sidelink')}
+              onClick={() => setIsOpen(false)}
+            >
+              <UsersIcon className="icon-20" />
+              <span>Usuários</span>
+            </NavLink>
           </nav>
 
           <div className="sidebar__footer">
@@ -217,7 +254,7 @@ export function Layout() {
         <div className="topbar">
           <span className="topbar__title">MaffContaby</span>
         </div>
-        <div className="container">
+        <div className={isGdpRoute ? 'container container--full' : 'container'}>
           <Outlet />
         </div>
       </main>
