@@ -601,6 +601,9 @@
   }
 
   function generateMonthReportHtml() {
+    const logoUrl = new URL("../maffcontaby.svg", window.location.href).href;
+    const generatedAt = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+
     const y = viewDate.getFullYear();
     const m = viewDate.getMonth();
     const monthTitleRaw = monthFmt.format(viewDate);
@@ -682,16 +685,50 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GDP — ${escapeHtml(monthTitle)}</title>
     <style>
-      :root{ color-scheme: light; }
+      :root{ color-scheme: light dark; }
       *{ box-sizing: border-box; }
-      html,body{ height: 100%; }
+      html,body{ min-height: 100%; }
       body{
         margin: 0;
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
         background: ${bg};
         color: ${text};
+        padding-bottom: 56px;
       }
-      .wrap{ max-width: 980px; margin: 0 auto; padding: 22px 20px 40px; }
+      .wrap{ max-width: 980px; margin: 0 auto; padding: 22px 20px 28px; }
+      .pdf-banner{
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid ${border};
+        margin-bottom: 18px;
+      }
+      .pdf-logo{
+        flex: 0 0 auto;
+        width: 56px;
+        height: 56px;
+        object-fit: contain;
+        border-radius: 12px;
+        border: 1px solid ${border};
+        background: ${store.theme === "light" ? "#fff" : "rgba(255,255,255,.06)"};
+      }
+      .pdf-brand-lines{
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .pdf-brand-name{
+        font-weight: 800;
+        font-size: 15px;
+        letter-spacing: .02em;
+        color: ${text};
+      }
+      .pdf-brand-tag{
+        font-size: 12px;
+        color: ${muted};
+      }
       .head{
         display:flex;
         align-items:flex-end;
@@ -750,15 +787,56 @@
         border-radius: 12px;
         color: ${muted};
       }
+      .doc-footer{
+        margin-top: 28px;
+        padding-top: 12px;
+        border-top: 1px solid ${border};
+        font-size: 11px;
+        color: ${muted};
+        text-align: center;
+        line-height: 1.45;
+      }
+      .doc-footer strong{ color: ${text}; font-weight: 700; }
       @media print{
-        @page{ margin: 12mm; }
-        .wrap{ max-width: none; padding: 0; }
+        @page{ margin: 12mm; margin-bottom: 18mm; }
+        body{
+          background: #fff !important;
+          color: #111827 !important;
+          padding-bottom: 0;
+        }
+        .wrap{ max-width: none; padding: 0 0 14mm; }
         .day{ break-inside: avoid; }
+        .pdf-logo{
+          border-color: #d1d5db !important;
+          background: #fff !important;
+        }
+        .pdf-brand-name, h1, .month-total strong, .tfoot-total, .doc-footer strong{ color: #111827 !important; }
+        .meta, .month-total, th, .tfoot-label, .empty, .doc-footer{ color: #4b5563 !important; }
+        .table, th, td, tfoot td, .head, .pdf-banner{ border-color: #e5e7eb !important; }
+        .doc-footer{
+          position: fixed;
+          left: 12mm;
+          right: 12mm;
+          bottom: 8mm;
+          margin: 0;
+          padding: 8px 0 0;
+          border-top: 1px solid #e5e7eb;
+          background: #fff;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
       }
     </style>
   </head>
   <body>
     <div class="wrap">
+      <div class="pdf-banner" aria-label="Marca">
+        <img class="pdf-logo" src="${escapeHtml(logoUrl)}" width="56" height="56" alt="MaffContaby" />
+        <div class="pdf-brand-lines">
+          <div class="pdf-brand-name">MaffContaby</div>
+          <div class="pdf-brand-tag">Gestão contábil · GDP — Registro diário de atividades</div>
+        </div>
+      </div>
       <header class="head">
         <div>
           <h1>GDP — ${escapeHtml(monthTitle)}</h1>
@@ -769,9 +847,20 @@
         </div>
       </header>
       ${content}
+      <footer class="doc-footer">
+        <strong>MaffContaby</strong> · Relatório mensal GDP · Emitido em ${escapeHtml(generatedAt)}<br />
+        Documento gerado pelo sistema — uso interno.
+      </footer>
     </div>
     <script>
-      window.addEventListener("load", () => setTimeout(() => window.print(), 80));
+      window.addEventListener("load", () => {
+        const runPrint = () => setTimeout(() => window.print(), 120);
+        const img = document.querySelector(".pdf-logo");
+        if (img && !img.complete) {
+          img.addEventListener("load", runPrint, { once: true });
+          img.addEventListener("error", runPrint, { once: true });
+        } else runPrint();
+      });
     </script>
   </body>
 </html>`;
