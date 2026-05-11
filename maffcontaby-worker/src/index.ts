@@ -47,7 +47,7 @@ type DbSnapshot = {
 type ImportResult = {
   entriesInserted: number;
   assetsInserted: number;
-};
+}; 
 
 type GdpRecord = {
   id: string;
