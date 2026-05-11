@@ -1,0 +1,13 @@
+0 verbose cli C:\nvm4w\nodejs\node.exe C:\nvm4w\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.9.4
+2 info using node@v22.22.0
+3 silly config load:file:C:\Users\Edenilson\AppData\Local\nvm\v22.22.0\node_modules\npm\npmrc
+4 silly config load:file:C:\Edenilson\MaffContaby\maffcontaby-worker\.npmrc
+5 silly config load:file:C:\Users\Edenilson\.npmrc
+6 silly config load:file:C:\nvm4w\nodejs\etc\npmrc
+7 verbose title npm run dev
+8 verbose argv "run" "dev"
+9 verbose logfile logs-max:10 dir:c:\Edenilson\MaffContaby\.localappdata\npm-cache\_logs\2026-05-11T15_54_34_883Z-
+10 verbose logfile c:\Edenilson\MaffContaby\.localappdata\npm-cache\_logs\2026-05-11T15_54_34_883Z-debug-0.log
+11 silly logfile done cleaning log files
+12 http fetch GET 200 https://registry.npmjs.org/npm 173ms
