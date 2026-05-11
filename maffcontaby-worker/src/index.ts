@@ -216,6 +216,11 @@ async function buildExecutivoPdf(db: DbSnapshot, params: ReportParams) {
   const fontTitle = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontH2 = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontBody = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const logo = await pdfDoc.embedPng(b64Decode(MAFF_LOGO_PNG_B64));
+  const headerLogoH = 28;
+  const headerLogoW = (logo.width / logo.height) * headerLogoH;
+  const footerLogoH = 16;
+  const footerLogoW = (logo.width / logo.height) * footerLogoH;
 
   const page = pdfDoc.addPage([595.28, 841.89]);
   const w = page.getWidth();
@@ -229,6 +234,12 @@ async function buildExecutivoPdf(db: DbSnapshot, params: ReportParams) {
   let y = h - margin;
 
   page.drawRectangle({ x: margin, y: y - 46, width: w - margin * 2, height: 46, color: brand });
+  page.drawImage(logo, {
+    x: w - margin - headerLogoW - 12,
+    y: y - 46 + (46 - headerLogoH) / 2,
+    width: headerLogoW,
+    height: headerLogoH,
+  });
   page.drawText('Relatório Executivo', { x: margin + 14, y: y - 30, size: 20, font: fontTitle, color: rgb(1, 1, 1) });
   page.drawText(`Gerado em ${new Date().toLocaleString('pt-BR')}`, {
     x: margin + 14,
@@ -318,6 +329,16 @@ async function buildExecutivoPdf(db: DbSnapshot, params: ReportParams) {
     y -= rowH;
   }
 
+  for (const p of pdfDoc.getPages()) {
+    const pw = p.getWidth();
+    p.drawImage(logo, {
+      x: pw - margin - footerLogoW,
+      y: 16,
+      width: footerLogoW,
+      height: footerLogoH,
+    });
+  }
+
   const bytes = await pdfDoc.save();
   return { ok: true as const, bytes };
 }
@@ -330,6 +351,11 @@ async function buildDetalhadoPdf(db: DbSnapshot, params: ReportParams) {
   const fontTitle = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontH2 = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontBody = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const logo = await pdfDoc.embedPng(b64Decode(MAFF_LOGO_PNG_B64));
+  const headerLogoH = 26;
+  const headerLogoW = (logo.width / logo.height) * headerLogoH;
+  const footerLogoH = 16;
+  const footerLogoW = (logo.width / logo.height) * footerLogoH;
 
   const margin = 40;
   const brand = rgb(0.298, 0.686, 0.314);
@@ -350,6 +376,12 @@ async function buildDetalhadoPdf(db: DbSnapshot, params: ReportParams) {
 
   const header = () => {
     page.drawRectangle({ x: margin, y: y - 42, width: w - margin * 2, height: 42, color: brand });
+    page.drawImage(logo, {
+      x: w - margin - headerLogoW - 12,
+      y: y - 42 + (42 - headerLogoH) / 2,
+      width: headerLogoW,
+      height: headerLogoH,
+    });
     page.drawText('Relatório Detalhado', { x: margin + 14, y: y - 28, size: 18, font: fontTitle, color: rgb(1, 1, 1) });
     page.drawText(`Gerado em ${new Date().toLocaleString('pt-BR')}`, {
       x: margin + 14,
@@ -435,6 +467,16 @@ async function buildDetalhadoPdf(db: DbSnapshot, params: ReportParams) {
     }
 
     y -= 6;
+  }
+
+  for (const p of pdfDoc.getPages()) {
+    const pw = p.getWidth();
+    p.drawImage(logo, {
+      x: pw - margin - footerLogoW,
+      y: 16,
+      width: footerLogoW,
+      height: footerLogoH,
+    });
   }
 
   const bytes = await pdfDoc.save();
