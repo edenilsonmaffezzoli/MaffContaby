@@ -628,17 +628,50 @@ function trimLower(value: string) {
   return value.trim().toLowerCase();
 }
 
+const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
 function b64Encode(bytes: ArrayBuffer) {
-  let binary = '';
-  const arr = new Uint8Array(bytes);
-  for (let i = 0; i < arr.length; i++) binary += String.fromCharCode(arr[i]);
-  return btoa(binary);
+  const data = new Uint8Array(bytes);
+  let out = '';
+  for (let i = 0; i < data.length; i += 3) {
+    const a = data[i] ?? 0;
+    const b = data[i + 1] ?? 0;
+    const c = data[i + 2] ?? 0;
+    const triple = (a << 16) | (b << 8) | c;
+    out += B64_ALPHABET[(triple >> 18) & 63];
+    out += B64_ALPHABET[(triple >> 12) & 63];
+    out += i + 1 < data.length ? B64_ALPHABET[(triple >> 6) & 63] : '=';
+    out += i + 2 < data.length ? B64_ALPHABET[triple & 63] : '=';
+  }
+  return out;
 }
 
 function b64Decode(b64: string) {
-  const binary = atob(b64);
-  const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  const clean = b64.replace(/\s+/g, '');
+  if (clean.length % 4 !== 0) throw new Error('Base64 inválido');
+  const pads = clean.endsWith('==') ? 2 : clean.endsWith('=') ? 1 : 0;
+  const outLen = (clean.length / 4) * 3 - pads;
+  const out = new Uint8Array(outLen);
+  const index = new Int16Array(256);
+  index.fill(-1);
+  for (let i = 0; i < B64_ALPHABET.length; i++) index[B64_ALPHABET.charCodeAt(i)] = i;
+
+  let pos = 0;
+  for (let i = 0; i < clean.length; i += 4) {
+    const c0 = clean.charCodeAt(i);
+    const c1 = clean.charCodeAt(i + 1);
+    const c2 = clean.charCodeAt(i + 2);
+    const c3 = clean.charCodeAt(i + 3);
+    const v0 = index[c0];
+    const v1 = index[c1];
+    const v2 = c2 === 61 ? 0 : index[c2];
+    const v3 = c3 === 61 ? 0 : index[c3];
+    if (v0 < 0 || v1 < 0 || (c2 !== 61 && v2 < 0) || (c3 !== 61 && v3 < 0)) throw new Error('Base64 inválido');
+    const triple = (v0 << 18) | (v1 << 12) | (v2 << 6) | v3;
+    if (pos < outLen) out[pos++] = (triple >> 16) & 255;
+    if (pos < outLen) out[pos++] = (triple >> 8) & 255;
+    if (pos < outLen) out[pos++] = triple & 255;
+  }
   return out.buffer;
 }
 
@@ -1362,8 +1395,9 @@ export default {
     }
 
     return withCors(notFound());
-    } catch {
-      return withCors(text('Internal Server Error', { status: 500 }));
+    } catch (err) {
+      const message = err instanceof Error && err.message.trim() ? err.message.trim() : 'Internal Server Error';
+      return withCors(text(message, { status: 500 }));
     }
   },
 };
