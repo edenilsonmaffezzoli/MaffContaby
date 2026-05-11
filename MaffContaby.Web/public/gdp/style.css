@@ -171,6 +171,7 @@ body{
   flex-direction: column;
   gap: 10px;
   min-height: 0;
+  overflow: hidden;
   background: transparent;
 }
 .day.weekend:not(.has-records){
@@ -196,7 +197,14 @@ body{
   background: color-mix(in srgb, var(--primary) 16%, var(--surface));
 }
 
-.activities{ display:flex; flex-direction: column; gap: 10px; }
+.activities{
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
 .activity{
   display:flex;
   align-items: center;
