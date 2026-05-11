@@ -1,4 +1,5 @@
 import { useHttpClient } from '@/hooks/use-http-client';
+import { getApiBaseUrl } from '@/config/api-base-url';
 import { bootstrapAdmin, getBootstrapStatus, login } from '@/services/auth-service';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -29,6 +30,8 @@ export function LoginPage() {
   const bootstrapMutation = useMutation({
     mutationFn: async () => bootstrapAdmin(httpClient, { username: username.trim(), password }),
     onSuccess: async () => {
+      localStorage.setItem('gdp_api_base_url', getApiBaseUrl());
+      localStorage.setItem('gdp_spa_base_path', import.meta.env.BASE_URL);
       statusQuery.refetch();
     },
     onError: e => {
@@ -40,6 +43,8 @@ export function LoginPage() {
     mutationFn: async () => login(httpClient, { username: username.trim(), password }),
     onSuccess: async data => {
       localStorage.setItem('gdp_token', data.token);
+      localStorage.setItem('gdp_api_base_url', getApiBaseUrl());
+      localStorage.setItem('gdp_spa_base_path', import.meta.env.BASE_URL);
       setError(null);
       navigate('/gdp', { replace: true });
     },
@@ -99,4 +104,3 @@ export function LoginPage() {
     </div>
   );
 }
-
