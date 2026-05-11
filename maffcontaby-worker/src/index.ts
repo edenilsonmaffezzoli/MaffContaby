@@ -71,6 +71,8 @@ type GdpStore = {
 interface Env {
   MAFF_KV: KVNamespace;
   WRITE_KEY?: string;
+  GDP_INIT_ADMIN_USERNAME?: string;
+  GDP_INIT_ADMIN_PASSWORD?: string;
 }
 
 const DB_KEY = 'db';
@@ -677,8 +679,14 @@ async function verifyPassword(password: string, stored: PasswordHash) {
 }
 
 async function readGdpUsers(env: Env): Promise<GdpUsersSnapshot> {
-  const snap = (await env.MAFF_KV.get(GDP_USERS_KEY, { type: 'json' })) as GdpUsersSnapshot | null;
-  if (snap && snap.version === 1 && Array.isArray(snap.users)) return snap;
+  const raw = await env.MAFF_KV.get(GDP_USERS_KEY);
+  if (raw) {
+    try {
+      const snap = JSON.parse(raw) as GdpUsersSnapshot;
+      if (snap && snap.version === 1 && Array.isArray(snap.users)) return snap;
+    } catch {
+    }
+  }
   return { version: 1, updatedAt: new Date().toISOString(), users: [] };
 }
 
@@ -686,6 +694,25 @@ async function writeGdpUsers(env: Env, snap: GdpUsersSnapshot) {
   const payload: GdpUsersSnapshot = { version: 1, updatedAt: new Date().toISOString(), users: snap.users ?? [] };
   await env.MAFF_KV.put(GDP_USERS_KEY, JSON.stringify(payload));
   return payload;
+}
+
+async function ensureGdpAdminInitialized(env: Env) {
+  const users = await readGdpUsers(env);
+  if (users.users.length > 0) return users;
+  const username = (env.GDP_INIT_ADMIN_USERNAME?.trim() || 'admin').trim();
+  const password = env.GDP_INIT_ADMIN_PASSWORD ?? '';
+  if (!password) return users;
+
+  const now = new Date().toISOString();
+  const user: GdpUser = {
+    id: crypto.randomUUID(),
+    username,
+    admin: true,
+    password: await hashPassword(password),
+    createdAt: now,
+    updatedAt: now,
+  };
+  return writeGdpUsers(env, { ...users, users: [user] });
 }
 
 function getBearerToken(request: Request) {
@@ -697,7 +724,15 @@ function getBearerToken(request: Request) {
 async function requireSession(request: Request, env: Env) {
   const token = getBearerToken(request);
   if (!token) return { ok: false as const, response: unauthorized() };
-  const session = (await env.MAFF_KV.get(`${GDP_SESSION_PREFIX}${token}`, { type: 'json' })) as GdpSession | null;
+  const raw = await env.MAFF_KV.get(`${GDP_SESSION_PREFIX}${token}`);
+  let session: GdpSession | null = null;
+  if (raw) {
+    try {
+      session = JSON.parse(raw) as GdpSession;
+    } catch {
+      session = null;
+    }
+  }
   if (!session || session.token !== token || !session.userId) return { ok: false as const, response: unauthorized() };
   const users = await readGdpUsers(env);
   const user = users.users.find(u => u.id === session.userId);
@@ -720,87 +755,92 @@ function assertWriteAuthorized(request: Request, env: Env) {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    const path = url.pathname.replace(/\/+$/, '') || '/';
-    const method = request.method.toUpperCase();
+    try {
+      const url = new URL(request.url);
+      const path = url.pathname.replace(/\/+$/, '') || '/';
+      const method = request.method.toUpperCase();
 
-    if (method === 'OPTIONS') return withCors(text('', { status: 204 }));
+      if (method === 'OPTIONS') return withCors(text('', { status: 204 }));
 
-    if (isWriteMethod(method) && !path.startsWith('/api/auth') && !path.startsWith('/api/gdp')) {
-      const auth = assertWriteAuthorized(request, env);
-      if (!auth.ok) return withCors(auth.response);
-    }
+      if (isWriteMethod(method) && !path.startsWith('/api/auth') && !path.startsWith('/api/gdp')) {
+        const auth = assertWriteAuthorized(request, env);
+        if (!auth.ok) return withCors(auth.response);
+      }
 
-    if (path === '/api/auth/bootstrap') {
-      const users = await readGdpUsers(env);
-      const hasAny = users.users.length > 0;
+      if (path.startsWith('/api/auth') || path.startsWith('/api/gdp')) {
+        await ensureGdpAdminInitialized(env);
+      }
 
-      if (method === 'GET') return withCors(json({ ok: true, needed: !hasAny }));
+      if (path === '/api/auth/bootstrap') {
+        const users = await readGdpUsers(env);
+        const hasAny = users.users.length > 0;
 
-      if (method === 'POST') {
-        if (hasAny) return withCors(badRequest('Bootstrap já concluído'));
+        if (method === 'GET') return withCors(json({ ok: true, needed: !hasAny }));
+
+        if (method === 'POST') {
+          if (hasAny) return withCors(badRequest('Bootstrap já concluído'));
+          const body = (await request.json().catch(() => null)) as { username?: string; password?: string } | null;
+          const username = body?.username?.trim() ?? '';
+          const password = body?.password ?? '';
+          if (trimLower(username) !== 'admin') return withCors(badRequest('username deve ser "admin"'));
+          if (typeof password !== 'string' || password.length < 8) return withCors(badRequest('password inválida'));
+
+          const now = new Date().toISOString();
+          const user: GdpUser = {
+            id: crypto.randomUUID(),
+            username: 'admin',
+            admin: true,
+            password: await hashPassword(password),
+            createdAt: now,
+            updatedAt: now,
+          };
+          await writeGdpUsers(env, { ...users, users: [user] });
+          return withCors(json({ ok: true }));
+        }
+
+        return withCors(methodNotAllowed());
+      }
+
+      if (path === '/api/auth/login') {
+        if (method !== 'POST') return withCors(methodNotAllowed());
         const body = (await request.json().catch(() => null)) as { username?: string; password?: string } | null;
         const username = body?.username?.trim() ?? '';
         const password = body?.password ?? '';
-        if (trimLower(username) !== 'admin') return withCors(badRequest('username deve ser "admin"'));
-        if (typeof password !== 'string' || password.length < 8) return withCors(badRequest('password inválida'));
+        if (!username || typeof password !== 'string') return withCors(badRequest('Credenciais inválidas'));
 
-        const now = new Date().toISOString();
-        const user: GdpUser = {
-          id: crypto.randomUUID(),
-          username: 'admin',
-          admin: true,
-          password: await hashPassword(password),
-          createdAt: now,
-          updatedAt: now,
-        };
-        await writeGdpUsers(env, { ...users, users: [user] });
+        const users = await readGdpUsers(env);
+        const user = users.users.find(u => trimLower(u.username) === trimLower(username));
+        if (!user) return withCors(unauthorized());
+        const ok = await verifyPassword(password, user.password);
+        if (!ok) return withCors(unauthorized());
+
+        const token = crypto.randomUUID();
+        const session: GdpSession = { token, userId: user.id, createdAt: new Date().toISOString() };
+        await env.MAFF_KV.put(`${GDP_SESSION_PREFIX}${token}`, JSON.stringify(session), { expirationTtl: 60 * 60 * 24 * 30 });
+        return withCors(
+          json({
+            ok: true,
+            token,
+            user: { id: user.id, username: user.username, admin: user.admin },
+          }),
+        );
+      }
+
+      if (path === '/api/auth/me') {
+        if (method !== 'GET') return withCors(methodNotAllowed());
+        const auth = await requireSession(request, env);
+        if (!auth.ok) return withCors(auth.response);
+        return withCors(json({ ok: true, user: { id: auth.user.id, username: auth.user.username, admin: auth.user.admin } }));
+      }
+
+      if (path === '/api/auth/logout') {
+        if (method !== 'POST') return withCors(methodNotAllowed());
+        const token = getBearerToken(request);
+        if (token) await env.MAFF_KV.delete(`${GDP_SESSION_PREFIX}${token}`);
         return withCors(json({ ok: true }));
       }
 
-      return withCors(methodNotAllowed());
-    }
-
-    if (path === '/api/auth/login') {
-      if (method !== 'POST') return withCors(methodNotAllowed());
-      const body = (await request.json().catch(() => null)) as { username?: string; password?: string } | null;
-      const username = body?.username?.trim() ?? '';
-      const password = body?.password ?? '';
-      if (!username || typeof password !== 'string') return withCors(badRequest('Credenciais inválidas'));
-
-      const users = await readGdpUsers(env);
-      const user = users.users.find(u => trimLower(u.username) === trimLower(username));
-      if (!user) return withCors(unauthorized());
-      const ok = await verifyPassword(password, user.password);
-      if (!ok) return withCors(unauthorized());
-
-      const token = crypto.randomUUID();
-      const session: GdpSession = { token, userId: user.id, createdAt: new Date().toISOString() };
-      await env.MAFF_KV.put(`${GDP_SESSION_PREFIX}${token}`, JSON.stringify(session), { expirationTtl: 60 * 60 * 24 * 30 });
-      return withCors(
-        json({
-          ok: true,
-          token,
-          user: { id: user.id, username: user.username, admin: user.admin },
-        }),
-      );
-    }
-
-    if (path === '/api/auth/me') {
-      if (method !== 'GET') return withCors(methodNotAllowed());
-      const auth = await requireSession(request, env);
-      if (!auth.ok) return withCors(auth.response);
-      return withCors(json({ ok: true, user: { id: auth.user.id, username: auth.user.username, admin: auth.user.admin } }));
-    }
-
-    if (path === '/api/auth/logout') {
-      if (method !== 'POST') return withCors(methodNotAllowed());
-      const token = getBearerToken(request);
-      if (token) await env.MAFF_KV.delete(`${GDP_SESSION_PREFIX}${token}`);
-      return withCors(json({ ok: true }));
-    }
-
-    if (path === '/api/db') {
+      if (path === '/api/db') {
       if (method === 'GET') {
         const db = await readDb(env);
         return withCors(json(db));
@@ -828,9 +868,9 @@ export default {
       }
 
       return withCors(methodNotAllowed());
-    }
+      }
 
-    if (path === '/api/gdp/users') {
+      if (path === '/api/gdp/users') {
       const auth = await requireSession(request, env);
       if (!auth.ok) return withCors(auth.response);
       if (!auth.user.admin) return withCors(forbidden());
@@ -875,9 +915,9 @@ export default {
       }
 
       return withCors(methodNotAllowed());
-    }
+      }
 
-    if (path.startsWith('/api/gdp/users/')) {
+      if (path.startsWith('/api/gdp/users/')) {
       const auth = await requireSession(request, env);
       if (!auth.ok) return withCors(auth.response);
       if (!auth.user.admin) return withCors(forbidden());
@@ -922,9 +962,9 @@ export default {
       }
 
       return withCors(methodNotAllowed());
-    }
+      }
 
-    if (path === '/api/gdp/store') {
+      if (path === '/api/gdp/store') {
       const auth = await requireSession(request, env);
       if (!auth.ok) return withCors(auth.response);
 
@@ -935,7 +975,15 @@ export default {
       const kvKey = `${GDP_STORE_PREFIX}${userId}`;
 
       if (method === 'GET') {
-        const store = (await env.MAFF_KV.get(kvKey, { type: 'json' })) as GdpStore | null;
+        const raw = await env.MAFF_KV.get(kvKey);
+        let store: GdpStore | null = null;
+        if (raw) {
+          try {
+            store = JSON.parse(raw) as GdpStore;
+          } catch {
+            store = null;
+          }
+        }
         return withCors(json({ ok: true, store: store ?? null }));
       }
 
@@ -948,7 +996,7 @@ export default {
       }
 
       return withCors(methodNotAllowed());
-    }
+      }
 
     if (path === '/api/people') {
       const db = await readDb(env);
@@ -1314,5 +1362,8 @@ export default {
     }
 
     return withCors(notFound());
+    } catch {
+      return withCors(text('Internal Server Error', { status: 500 }));
+    }
   },
 };

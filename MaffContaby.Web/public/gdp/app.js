@@ -157,10 +157,31 @@
     return (localStorage.getItem(TOKEN_KEY) || "").trim();
   }
 
+  function getSpaBasePath() {
+    const raw = (localStorage.getItem("gdp_spa_base_path") || "/").trim() || "/";
+    const withLeading = raw.startsWith("/") ? raw : `/${raw}`;
+    return withLeading.endsWith("/") ? withLeading : `${withLeading}/`;
+  }
+
+  function getLoginUrl() {
+    return `${window.location.origin}${getSpaBasePath()}login`;
+  }
+
+  function getApiBaseUrl() {
+    const raw = (localStorage.getItem("gdp_api_base_url") || "").trim();
+    return raw ? raw.replace(/\/+$/, "") : "";
+  }
+
+  function apiUrl(path) {
+    const base = getApiBaseUrl();
+    if (!base) return path;
+    return `${base}${path}`;
+  }
+
   function requireTokenOrRedirect() {
     const token = getToken();
     if (token) return token;
-    window.location.href = "/login";
+    window.location.href = getLoginUrl();
     return "";
   }
 
@@ -171,7 +192,7 @@
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     };
-    const res = await fetch(path, {
+    const res = await fetch(apiUrl(path), {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
@@ -187,7 +208,7 @@
     if (!res.ok) {
       if (res.status === 401) {
         localStorage.removeItem(TOKEN_KEY);
-        window.location.href = "/login";
+        window.location.href = getLoginUrl();
       }
       const msg = (typeof data === "string" && data) || data?.error || `HTTP ${res.status}`;
       throw new Error(msg);
