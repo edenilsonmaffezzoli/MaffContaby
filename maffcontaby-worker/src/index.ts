@@ -701,7 +701,7 @@ function timingSafeEqual(aB64: string, bB64: string) {
 async function hashPassword(password: string): Promise<PasswordHash> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const saltB64 = b64Encode(salt.buffer);
-  const iterations = 200_000;
+  const iterations = 100_000;
   const hashB64 = await pbkdf2Hash(password, saltB64, iterations);
   return { saltB64, iterations, hashB64 };
 }
