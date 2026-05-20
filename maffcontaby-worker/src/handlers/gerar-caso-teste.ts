@@ -16,6 +16,7 @@ export type GerarCasoTesteEnv = {
   GEMINI_TIMEOUT_SECONDS?: string;
 };
 
+
 const MAX_IMAGES = 8;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const DEFAULT_MAX_INPUT_CHARS = 150_000;
