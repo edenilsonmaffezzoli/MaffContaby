@@ -1,5 +1,5 @@
 # Copie para .dev.vars (não commitar) e preencha os valores.
-# Produção: wrangler secret put GEMINI_API_KEY
+# Produção: wrangler secret put GEMINI_API_KEY 
 
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-2.5-flash
