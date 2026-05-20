@@ -116,6 +116,30 @@ function stripJsonFence(raw: string) {
   return s;
 }
 
+function slugTag(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9_-]/g, '');
+}
+
+function buildCaseTags(o: Record<string, unknown>): string[] | undefined {
+  const tags: string[] = [];
+  const suite = typeof o.suite === 'string' ? slugTag(o.suite) : '';
+  const subsuite = typeof o.subsuite === 'string' ? slugTag(o.subsuite) : '';
+  if (suite) tags.push(suite);
+  if (subsuite) tags.push(subsuite);
+  if (Array.isArray(o.tags)) {
+    for (const t of o.tags) {
+      if (typeof t !== 'string' || !t.trim()) continue;
+      const slug = slugTag(t);
+      if (slug && !tags.includes(slug)) tags.push(slug);
+    }
+  }
+  return tags.length ? tags : undefined;
+}
+
 function normalizeCases(raw: unknown): QaseCase[] {
   if (!Array.isArray(raw)) return [];
   const cases: QaseCase[] = [];
@@ -130,46 +154,82 @@ function normalizeCases(raw: unknown): QaseCase[] {
       .map(step => {
         if (!step || typeof step !== 'object') return null;
         const s = step as Record<string, unknown>;
-        const action = typeof s.action === 'string' ? s.action.trim() : '';
+        const action =
+          typeof s.action === 'string'
+            ? s.action.trim()
+            : typeof s.actions === 'string'
+              ? s.actions.trim()
+              : '';
         const expected_result =
           typeof s.expected_result === 'string'
             ? s.expected_result.trim()
             : typeof s.expectedResult === 'string'
               ? s.expectedResult.trim()
-              : '';
+              : typeof s.expectedresults === 'string'
+                ? s.expectedresults.trim()
+                : '';
         if (!action || !expected_result) return null;
-        const data = typeof s.data === 'string' ? s.data.trim() : undefined;
-        return { action, expected_result, ...(data ? { data } : {}) };
+        return { action, expected_result };
       })
-      .filter((s): s is NonNullable<typeof s> => s !== null);
+      .filter((s): s is NonNullable<typeof s> => s !== null)
+      .slice(0, 7);
 
     if (steps.length === 0) continue;
-
-    const tags = Array.isArray(o.tags)
-      ? o.tags
-          .filter((t): t is string => typeof t === 'string' && Boolean(t.trim()))
-          .map(t => t.trim())
-      : undefined;
 
     cases.push({
       title,
       description: typeof o.description === 'string' ? o.description.trim() : undefined,
       preconditions: typeof o.preconditions === 'string' ? o.preconditions.trim() : undefined,
       priority: typeof o.priority === 'string' ? o.priority.trim() : undefined,
-      severity: typeof o.severity === 'string' ? o.severity.trim() : undefined,
-      tags: tags?.length ? tags : undefined,
+      tags: buildCaseTags(o),
       steps,
     });
   }
   return cases;
 }
 
+function formatAnalysisMarkdown(analysis: Record<string, unknown>): string {
+  const lines: string[] = ['# Resumo da análise', ''];
+  const modulos = Array.isArray(analysis.modulos)
+    ? analysis.modulos.filter((m): m is string => typeof m === 'string' && Boolean(m.trim()))
+    : [];
+  if (modulos.length) {
+    lines.push('## Módulos identificados', '', ...modulos.map(m => `- ${m}`), '');
+  }
+  if (typeof analysis.totalCasos === 'number') {
+    lines.push(`**Total de casos:** ${analysis.totalCasos}`, '');
+  }
+  const funcs = Array.isArray(analysis.funcionalidades)
+    ? analysis.funcionalidades.filter((f): f is string => typeof f === 'string' && Boolean(f.trim()))
+    : [];
+  if (funcs.length) {
+    lines.push('## Funcionalidades cobertas', '', ...funcs.map(f => `- ${f}`), '');
+  }
+  const lacunas = Array.isArray(analysis.semCobertura)
+    ? analysis.semCobertura.filter((f): f is string => typeof f === 'string' && Boolean(f.trim()))
+    : [];
+  if (lacunas.length) {
+    lines.push('## Lacunas de cobertura', '', ...lacunas.map(f => `- ${f}`), '');
+  }
+  const riscos = Array.isArray(analysis.riscos)
+    ? analysis.riscos.filter((f): f is string => typeof f === 'string' && Boolean(f.trim()))
+    : [];
+  if (riscos.length) {
+    lines.push('## Riscos', '', ...riscos.map(f => `- ${f}`), '');
+  }
+  return lines.join('\n');
+}
+
 function parseGeminiResult(raw: string): GeminiAiResult {
   const parsed = JSON.parse(stripJsonFence(raw)) as Record<string, unknown>;
-  const markdown = typeof parsed.markdown === 'string' ? parsed.markdown.trim() : '';
+  let markdown = typeof parsed.markdown === 'string' ? parsed.markdown.trim() : '';
   const cases = normalizeCases(parsed.cases);
   if (!markdown && cases.length === 0) {
     throw new Error('JSON da IA sem markdown e sem cases');
+  }
+  if (parsed.analysis && typeof parsed.analysis === 'object') {
+    const analysisBlock = formatAnalysisMarkdown(parsed.analysis as Record<string, unknown>);
+    markdown = markdown ? `${analysisBlock}\n\n---\n\n${markdown}` : analysisBlock;
   }
   return {
     markdown: markdown || buildFallbackMarkdown(cases),

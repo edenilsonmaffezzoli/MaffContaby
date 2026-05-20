@@ -1,7 +1,6 @@
 /**
- * Converte XML legado ou re-sanitiza CSV para o padrão Qase CSV.
+ * Converte XML legado ou re-sanitiza CSV para o padrão Qase CSV (23 colunas).
  * Uso: node scripts/fix-qase-csv.mjs [entrada.csv|entrada.xml]
- * Saída: casos-teste-qase-corrigido.csv
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -9,24 +8,16 @@ import { resolve } from 'node:path';
 const INPUT = process.argv[2] ?? 'casos-teste-qase (1).xml';
 const OUTPUT = 'casos-teste-qase-corrigido.csv';
 
+const HEADER =
+  'title,description,preconditions,priority,tags/tag/0,tags/tag/1,tags/tag/2,tags/tag/3,steps/step/0/action,steps/step/0/expected_result,steps/step/1/action,steps/step/1/expected_result,steps/step/2/action,steps/step/2/expected_result,steps/step/3/action,steps/step/3/expected_result,steps/step/4/action,steps/step/4/expected_result,steps/step/5/action,steps/step/5/expected_result,steps/step/6/action,steps/step/6/expected_result,tags/tag/4';
+
+const STEP_SLOTS = 7;
+const TAG_SLOTS = 5;
 const ALLOWED = new Set(['low', 'medium', 'high']);
-const TAGS_BEFORE_STEPS = 4;
-const MIN_STEP_SLOTS = 7;
-const MIN_TAG_SLOTS = 5;
 
 function escapeCsvField(value) {
   if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
   return value;
-}
-
-function normalizePriority(raw, stats) {
-  const v = (raw ?? '').trim().toLowerCase();
-  if (v === 'critical') {
-    stats.criticalToHigh += 1;
-    return 'high';
-  }
-  if (ALLOWED.has(v)) return v;
-  return 'medium';
 }
 
 function parseCsvLine(line) {
@@ -52,28 +43,39 @@ function parseCsvLine(line) {
   return fields;
 }
 
-function buildHeader(maxSteps, maxTags) {
-  const cols = ['title', 'description', 'preconditions', 'priority'];
-  const tagsBefore = Math.min(TAGS_BEFORE_STEPS, maxTags);
-  for (let i = 0; i < tagsBefore; i++) cols.push(`tags/tag/${i}`);
-  for (let i = 0; i < maxSteps; i++) {
-    cols.push(`steps/step/${i}/action`, `steps/step/${i}/expected_result`);
+function normalizePriority(raw, stats) {
+  const v = (raw ?? '').trim().toLowerCase();
+  if (v === 'critical') {
+    stats.criticalToHigh += 1;
+    return 'high';
   }
-  for (let i = TAGS_BEFORE_STEPS; i < maxTags; i++) cols.push(`tags/tag/${i}`);
-  return cols;
+  if (ALLOWED.has(v)) return v;
+  return 'medium';
 }
 
-function buildRow(c, maxSteps, maxTags) {
+function normalizeTags(tags) {
+  return tags
+    .map(t =>
+      t
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9_-]/g, ''),
+    )
+    .filter(Boolean)
+    .slice(0, TAG_SLOTS);
+}
+
+function buildRow(c) {
   const tags = c.tags ?? [];
   const values = [c.title, c.description, c.preconditions ?? '', c.priority];
-  const tagsBefore = Math.min(TAGS_BEFORE_STEPS, maxTags);
-  for (let i = 0; i < tagsBefore; i++) values.push(tags[i] ?? '');
-  for (let i = 0; i < maxSteps; i++) {
+  for (let i = 0; i < 4; i++) values.push(tags[i] ?? '');
+  for (let i = 0; i < STEP_SLOTS; i++) {
     const s = c.steps[i];
     values.push(s?.action ?? '', s?.expected_result ?? '');
   }
-  for (let i = TAGS_BEFORE_STEPS; i < maxTags; i++) values.push(tags[i] ?? '');
-  return values.map(escapeCsvField);
+  values.push(tags[4] ?? '');
+  return values.map(escapeCsvField).join(',');
 }
 
 function extractText(block, tag) {
@@ -94,7 +96,9 @@ function parseXmlCases(xml, stats) {
     if (!description) description = title;
     const priority = normalizePriority(extractText(block, 'priority'), stats);
     const preconditions = extractText(block, 'preconditions') || '';
-    const tags = [...block.matchAll(/<tag>([\s\S]*?)<\/tag>/gi)].map(x => x[1].trim()).filter(Boolean);
+    const tags = normalizeTags(
+      [...block.matchAll(/<tag>([\s\S]*?)<\/tag>/gi)].map(x => x[1]),
+    );
     const steps = [];
     for (const sm of block.matchAll(/<step>([\s\S]*?)<\/step>/gi)) {
       const action = extractText(sm[1], 'action');
@@ -102,7 +106,15 @@ function parseXmlCases(xml, stats) {
       if (action && expected_result) steps.push({ action, expected_result });
     }
     if (!steps.length) continue;
-    cases.push({ title, description, preconditions, priority, tags, steps });
+    if (steps.length > STEP_SLOTS) stats.stepsTruncated += steps.length - STEP_SLOTS;
+    cases.push({
+      title,
+      description,
+      preconditions,
+      priority,
+      tags,
+      steps: steps.slice(0, STEP_SLOTS),
+    });
   }
   return cases;
 }
@@ -111,7 +123,6 @@ function parseCsvCases(raw, stats) {
   const lines = raw.replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
   const header = parseCsvLine(lines[0]);
   const col = name => header.indexOf(name);
-  const titleIdx = col('title');
   const tagCols = header
     .map((h, i) => ({ h, i }))
     .filter(({ h }) => /^tags\/tag\/\d+$/.test(h))
@@ -128,13 +139,13 @@ function parseCsvCases(raw, stats) {
   const cases = [];
   for (let li = 1; li < lines.length; li++) {
     const fields = parseCsvLine(lines[li]);
-    const title = fields[titleIdx]?.trim() ?? '';
+    const title = fields[col('title')]?.trim() ?? '';
     if (!title) continue;
     let description = col('description') >= 0 ? fields[col('description')]?.trim() ?? '' : '';
     if (!description) description = title;
     const priority = normalizePriority(col('priority') >= 0 ? fields[col('priority')] : '', stats);
     const preconditions = col('preconditions') >= 0 ? fields[col('preconditions')]?.trim() ?? '' : '';
-    const tags = tagCols.map(({ i }) => fields[i]?.trim() ?? '').filter(Boolean);
+    const tags = normalizeTags(tagCols.map(({ i }) => fields[i]?.trim() ?? '').filter(Boolean));
     const steps = [];
     for (const si of stepIndices) {
       const a = col(`steps/step/${si}/action`);
@@ -144,7 +155,15 @@ function parseCsvCases(raw, stats) {
       if (action && expected_result) steps.push({ action, expected_result });
     }
     if (!steps.length) continue;
-    cases.push({ title, description, preconditions, priority, tags, steps });
+    if (steps.length > STEP_SLOTS) stats.stepsTruncated += steps.length - STEP_SLOTS;
+    cases.push({
+      title,
+      description,
+      preconditions,
+      priority,
+      tags,
+      steps: steps.slice(0, STEP_SLOTS),
+    });
   }
   return cases;
 }
@@ -154,8 +173,8 @@ const raw = readFileSync(inputPath, 'utf8');
 const stats = {
   casesProcessed: 0,
   criticalToHigh: 0,
-  maxStepSlots: MIN_STEP_SLOTS,
-  maxTagSlots: MIN_TAG_SLOTS,
+  stepsTruncated: 0,
+  tagsTruncated: 0,
   outputFilename: OUTPUT,
 };
 
@@ -168,25 +187,13 @@ if (!cases.length) {
   process.exit(1);
 }
 
-let maxSteps = MIN_STEP_SLOTS;
-let maxTags = MIN_TAG_SLOTS;
-for (const c of cases) {
-  maxSteps = Math.max(maxSteps, c.steps.length);
-  maxTags = Math.max(maxTags, c.tags?.length ?? 0);
-}
-stats.maxStepSlots = maxSteps;
-stats.maxTagSlots = maxTags;
 stats.casesProcessed = cases.length;
-
-const header = buildHeader(maxSteps, maxTags);
-const rows = cases.map(c => buildRow(c, maxSteps, maxTags));
-const csv = [header.join(','), ...rows.map(r => r.join(','))].join('\n');
-
+const csv = `\uFEFF${HEADER}\r\n${cases.map(buildRow).join('\r\n')}\r\n`;
 const outPath = resolve(process.cwd(), OUTPUT);
 writeFileSync(outPath, csv, 'utf8');
 
 console.log(`Casos processados: ${stats.casesProcessed}`);
 console.log(`Prioridades "critical" → "high": ${stats.criticalToHigh}`);
-console.log(`Colunas de passos: ${stats.maxStepSlots}`);
-console.log(`Colunas de tags: ${stats.maxTagSlots}`);
+if (stats.stepsTruncated) console.log(`Passos omitidos: ${stats.stepsTruncated}`);
 console.log(`Arquivo: ${outPath}`);
+console.log('Importe no Qase com Source: Qase.io → CSV');
