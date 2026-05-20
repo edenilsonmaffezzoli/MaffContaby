@@ -241,6 +241,14 @@ export function Layout() {
               <span>Importar</span>
             </NavLink>
             <NavLink
+              to="/casos-teste-inteligentes"
+              className={({ isActive }) => (isActive ? 'sidelink sidelink--active' : 'sidelink')}
+              onClick={() => setIsOpen(false)}
+            >
+              <FileTextIcon className="icon-20" />
+              <span>Casos de Teste IA</span>
+            </NavLink>
+            <NavLink
               to="/gdp"
               className={({ isActive }) => (isActive ? 'sidelink sidelink--active' : 'sidelink')}
               onClick={() => setIsOpen(false)}

@@ -15,7 +15,7 @@ export function useHttpClient() {
       const isWrite = method === 'post' || method === 'put' || method === 'patch' || method === 'delete';
       const url = String(config.url ?? '');
 
-      if (url.startsWith('/api/auth') || url.startsWith('/api/gdp')) {
+      if (url.startsWith('/api/auth') || url.startsWith('/api/gdp') || url.startsWith('/api/gerar-caso-teste')) {
         const token = localStorage.getItem('gdp_token')?.trim() ?? '';
         if (token) {
           config.headers = config.headers ?? {};

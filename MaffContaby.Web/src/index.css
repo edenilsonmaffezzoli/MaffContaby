@@ -1045,4 +1045,44 @@ details[open] .table__row__summary .chevron {
     min-width: 0;
     width: 100%;
   }
+
+  .casos-teste-editor {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Casos de Teste Inteligentes — preview markdown */
+.casos-teste-preview h1,
+.casos-teste-preview h2,
+.casos-teste-preview h3 {
+  color: var(--primary);
+  margin-top: 0.75em;
+}
+.casos-teste-preview h1 { font-size: 1.25rem; }
+.casos-teste-preview h2 { font-size: 1.1rem; }
+.casos-teste-preview p,
+.casos-teste-preview li {
+  font-size: 14px;
+  line-height: 1.55;
+}
+.casos-teste-preview ol,
+.casos-teste-preview ul {
+  padding-left: 1.25em;
+}
+.casos-teste-preview pre {
+  background: var(--gray-100);
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  font-size: 12px;
+}
+.casos-teste-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.casos-teste-preview th,
+.casos-teste-preview td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
 }

@@ -1,4 +1,9 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { handleGerarCasoTeste } from './handlers/gerar-caso-teste';
+
+/** Logo PNG 1×1 (placeholder) — substitua por export real se necessário nos relatórios PDF. */
+const MAFF_LOGO_PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 type PersonDto = {
   id: string;
@@ -73,6 +78,10 @@ interface Env {
   WRITE_KEY?: string;
   GDP_INIT_ADMIN_USERNAME?: string;
   GDP_INIT_ADMIN_PASSWORD?: string;
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL?: string;
+  GEMINI_MAX_INPUT_CHARS?: string;
+  GEMINI_TIMEOUT_SECONDS?: string;
 }
 
 const DB_KEY = 'db';
@@ -837,13 +846,26 @@ export default {
 
       if (method === 'OPTIONS') return withCors(text('', { status: 204 }));
 
-      if (isWriteMethod(method) && !path.startsWith('/api/auth') && !path.startsWith('/api/gdp')) {
+      if (
+        isWriteMethod(method) &&
+        !path.startsWith('/api/auth') &&
+        !path.startsWith('/api/gdp') &&
+        path !== '/api/gerar-caso-teste'
+      ) {
         const auth = assertWriteAuthorized(request, env);
         if (!auth.ok) return withCors(auth.response);
       }
 
-      if (path.startsWith('/api/auth') || path.startsWith('/api/gdp')) {
+      if (path.startsWith('/api/auth') || path.startsWith('/api/gdp') || path === '/api/gerar-caso-teste') {
         await ensureGdpAdminInitialized(env);
+      }
+
+      if (path === '/api/gerar-caso-teste') {
+        if (method !== 'POST') return withCors(methodNotAllowed());
+        const session = await requireSession(request, env);
+        if (!session.ok) return withCors(session.response);
+        const response = await handleGerarCasoTeste(request, env);
+        return withCors(response);
       }
 
       if (path === '/api/auth/bootstrap') {
