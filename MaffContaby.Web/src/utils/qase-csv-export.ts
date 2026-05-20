@@ -2,20 +2,25 @@ import type { QaseCase, QaseStep } from '@/types/casos-teste';
 
 const ALLOWED_PRIORITIES = new Set(['low', 'medium', 'high']);
 
-/** Colunas tags/tag/0..3 antes dos passos; tags/tag/4+ depois (padrão Qase CSV). */
+/** Padrão fixo do arquivo validado casos-teste-qase-corrigido.csv (23 colunas). */
+const STEP_SLOTS = 7;
+const TAG_SLOTS = 5;
 const TAGS_BEFORE_STEPS = 4;
 
-/** Mínimos do arquivo validado casos-teste-qase-corrigido.csv */
-const MIN_STEP_SLOTS = 7;
-const MIN_TAG_SLOTS = 5;
+/** Cabeçalho exato — não alterar ordem nem nomes (requisito Qase). */
+export const QASE_CSV_HEADER =
+  'title,description,preconditions,priority,tags/tag/0,tags/tag/1,tags/tag/2,tags/tag/3,steps/step/0/action,steps/step/0/expected_result,steps/step/1/action,steps/step/1/expected_result,steps/step/2/action,steps/step/2/expected_result,steps/step/3/action,steps/step/3/expected_result,steps/step/4/action,steps/step/4/expected_result,steps/step/5/action,steps/step/5/expected_result,steps/step/6/action,steps/step/6/expected_result,tags/tag/4';
 
 export const QASE_CSV_FILENAME = 'casos-teste-qase-corrigido.csv';
+
+export const QASE_CSV_IMPORT_HINT =
+  'No Qase: ⋯ → Import Data → Source: Qase.io → formato CSV (não use XML nem "Qase.io CSV [deprecated]").';
 
 export type QaseCsvExportStats = {
   casesProcessed: number;
   criticalToHigh: number;
-  maxStepSlots: number;
-  maxTagSlots: number;
+  stepsTruncated: number;
+  tagsTruncated: number;
   outputFilename: string;
 };
 
@@ -28,8 +33,8 @@ function emptyStats(filename = QASE_CSV_FILENAME): QaseCsvExportStats {
   return {
     casesProcessed: 0,
     criticalToHigh: 0,
-    maxStepSlots: MIN_STEP_SLOTS,
-    maxTagSlots: MIN_TAG_SLOTS,
+    stepsTruncated: 0,
+    tagsTruncated: 0,
     outputFilename: filename,
   };
 }
@@ -54,50 +59,54 @@ function normalizePriority(
   return 'medium';
 }
 
+/** Tags no formato slug (sem espaços), como no CSV validado. */
+function normalizeTags(tags: string[] | undefined): string[] | undefined {
+  if (!tags?.length) return undefined;
+  const out = tags
+    .map(t =>
+      t
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9_-]/g, ''),
+    )
+    .filter(Boolean);
+  return out.length ? out : undefined;
+}
+
 function sanitizeCaseForQase(c: QaseCase, stats: QaseCsvExportStats): QaseCase {
   const priority = normalizePriority(c.priority, stats);
   const description = c.description?.trim() ? c.description.trim() : c.title.trim();
+  let tags = normalizeTags(c.tags);
+  let steps = c.steps
+    .filter(s => s.action?.trim() && s.expected_result?.trim())
+    .map(
+      (s): QaseStep => ({
+        action: s.action.trim(),
+        expected_result: s.expected_result.trim(),
+      }),
+    );
+
+  if (steps.length > STEP_SLOTS) {
+    stats.stepsTruncated += steps.length - STEP_SLOTS;
+    steps = steps.slice(0, STEP_SLOTS);
+  }
+  if (tags && tags.length > TAG_SLOTS) {
+    stats.tagsTruncated += tags.length - TAG_SLOTS;
+    tags = tags.slice(0, TAG_SLOTS);
+  }
 
   return {
     title: c.title.trim(),
     description,
     preconditions: c.preconditions?.trim() || undefined,
     priority,
-    tags: c.tags?.length ? c.tags.map(t => t.trim()).filter(Boolean) : undefined,
-    steps: c.steps.map(
-      (s): QaseStep => ({
-        action: s.action,
-        expected_result: s.expected_result,
-      }),
-    ),
+    tags,
+    steps,
   };
 }
 
-function resolveDimensions(cases: QaseCase[]) {
-  let maxSteps = MIN_STEP_SLOTS;
-  let maxTags = MIN_TAG_SLOTS;
-  for (const c of cases) {
-    maxSteps = Math.max(maxSteps, c.steps.length);
-    maxTags = Math.max(maxTags, c.tags?.length ?? 0);
-  }
-  return { maxSteps, maxTags };
-}
-
-/** Cabeçalho no padrão Qase: tags 0–3, passos, tags 4+. */
-export function buildQaseCsvHeader(maxSteps: number, maxTags: number): string[] {
-  const cols = ['title', 'description', 'preconditions', 'priority'];
-  const tagsBefore = Math.min(TAGS_BEFORE_STEPS, maxTags);
-  for (let i = 0; i < tagsBefore; i++) cols.push(`tags/tag/${i}`);
-  for (let i = 0; i < maxSteps; i++) {
-    cols.push(`steps/step/${i}/action`, `steps/step/${i}/expected_result`);
-  }
-  for (let i = TAGS_BEFORE_STEPS; i < maxTags; i++) {
-    cols.push(`tags/tag/${i}`);
-  }
-  return cols;
-}
-
-function buildCaseRow(c: QaseCase, maxSteps: number, maxTags: number): string[] {
+function buildCaseRow(c: QaseCase): string[] {
   const tags = c.tags ?? [];
   const values: string[] = [
     c.title,
@@ -106,55 +115,18 @@ function buildCaseRow(c: QaseCase, maxSteps: number, maxTags: number): string[] 
     c.priority ?? 'medium',
   ];
 
-  const tagsBefore = Math.min(TAGS_BEFORE_STEPS, maxTags);
-  for (let i = 0; i < tagsBefore; i++) values.push(tags[i] ?? '');
+  for (let i = 0; i < TAGS_BEFORE_STEPS; i++) values.push(tags[i] ?? '');
 
-  for (let i = 0; i < maxSteps; i++) {
+  for (let i = 0; i < STEP_SLOTS; i++) {
     const step = c.steps[i];
     values.push(step?.action ?? '', step?.expected_result ?? '');
   }
 
-  for (let i = TAGS_BEFORE_STEPS; i < maxTags; i++) {
-    values.push(tags[i] ?? '');
-  }
+  values.push(tags[4] ?? '');
 
   return values.map(escapeCsvField);
 }
 
-export function formatQaseCsvExportSummary(stats: QaseCsvExportStats): string {
-  return [
-    `Casos processados: ${stats.casesProcessed}`,
-    `Prioridades "critical" → "high": ${stats.criticalToHigh}`,
-    `Colunas de passos: ${stats.maxStepSlots}`,
-    `Colunas de tags: ${stats.maxTagSlots}`,
-    `Arquivo: ${stats.outputFilename}`,
-  ].join('\n');
-}
-
-export function buildQaseImportCsv(
-  cases: QaseCase[],
-  filename = QASE_CSV_FILENAME,
-): QaseCsvBuildResult {
-  const stats = emptyStats(filename);
-  const sanitized = cases.map(c => sanitizeCaseForQase(c, stats));
-
-  if (sanitized.length === 0) {
-    throw new Error('Nenhum caso de teste para exportar.');
-  }
-
-  const { maxSteps, maxTags } = resolveDimensions(sanitized);
-  stats.maxStepSlots = maxSteps;
-  stats.maxTagSlots = maxTags;
-  stats.casesProcessed = sanitized.length;
-
-  const header = buildQaseCsvHeader(maxSteps, maxTags);
-  const rows = sanitized.map(c => buildCaseRow(c, maxSteps, maxTags));
-  const csv = [header.join(','), ...rows.map(r => r.join(','))].join('\n');
-
-  return { csv, stats };
-}
-
-/** Parse simplificado de linha CSV (campos entre aspas ou separados por vírgula). */
 function parseCsvLine(line: string): string[] {
   const fields: string[] = [];
   let cur = '';
@@ -185,6 +157,65 @@ function parseCsvLine(line: string): string[] {
   return fields;
 }
 
+function assertCsvStructure(csv: string): void {
+  const lines = csv.replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
+  const expectedCols = parseCsvLine(QASE_CSV_HEADER).length;
+  if (parseCsvLine(lines[0]).join(',') !== QASE_CSV_HEADER) {
+    throw new Error('Cabeçalho CSV diverge do padrão Qase.');
+  }
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCsvLine(lines[i]);
+    if (cols.length !== expectedCols) {
+      throw new Error(
+        `Linha ${i + 1} com ${cols.length} colunas (esperado ${expectedCols}).`,
+      );
+    }
+    if (!cols[0]?.trim()) {
+      throw new Error(`Linha ${i + 1} sem título.`);
+    }
+  }
+}
+
+export function formatQaseCsvExportSummary(stats: QaseCsvExportStats): string {
+  const lines = [
+    `Casos processados: ${stats.casesProcessed}`,
+    `Prioridades "critical" → "high": ${stats.criticalToHigh}`,
+  ];
+  if (stats.stepsTruncated > 0) {
+    lines.push(`Passos omitidos (> ${STEP_SLOTS} por caso): ${stats.stepsTruncated}`);
+  }
+  if (stats.tagsTruncated > 0) {
+    lines.push(`Tags omitidas (> ${TAG_SLOTS} por caso): ${stats.tagsTruncated}`);
+  }
+  lines.push(`Arquivo: ${stats.outputFilename}`, '', QASE_CSV_IMPORT_HINT);
+  return lines.join('\n');
+}
+
+export function buildQaseImportCsv(
+  cases: QaseCase[],
+  filename = QASE_CSV_FILENAME,
+): QaseCsvBuildResult {
+  const stats = emptyStats(filename);
+  const sanitized = cases.map(c => sanitizeCaseForQase(c, stats));
+
+  if (sanitized.length === 0) {
+    throw new Error('Nenhum caso de teste para exportar.');
+  }
+
+  for (const c of sanitized) {
+    if (!c.steps.length) {
+      throw new Error(`Caso "${c.title}" sem passos válidos.`);
+    }
+  }
+
+  stats.casesProcessed = sanitized.length;
+  const rows = sanitized.map(c => buildCaseRow(c).join(','));
+  const csv = `\uFEFF${QASE_CSV_HEADER}\r\n${rows.join('\r\n')}\r\n`;
+
+  assertCsvStructure(csv);
+  return { csv, stats };
+}
+
 function parseCasesFromCsv(csvInput: string, stats: QaseCsvExportStats): QaseCase[] {
   const lines = csvInput.replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) {
@@ -195,26 +226,21 @@ function parseCasesFromCsv(csvInput: string, stats: QaseCsvExportStats): QaseCas
   const col = (name: string) => header.indexOf(name);
 
   const titleIdx = col('title');
-  const descIdx = col('description');
-  const preIdx = col('preconditions');
-  const priIdx = col('priority');
   if (titleIdx < 0) throw new Error('CSV sem coluna "title".');
 
   const tagCols = header
     .map((h, i) => ({ h, i }))
     .filter(({ h }) => /^tags\/tag\/\d+$/.test(h))
-    .sort((a, b) => {
-      const na = Number(a.h.split('/').pop());
-      const nb = Number(b.h.split('/').pop());
-      return na - nb;
-    });
+    .sort((a, b) => Number(a.h.split('/').pop()) - Number(b.h.split('/').pop()));
 
-  const stepIndices = new Set<number>();
-  for (const h of header) {
-    const m = h.match(/^steps\/step\/(\d+)\/action$/);
-    if (m) stepIndices.add(Number(m[1]));
-  }
-  const sortedSteps = [...stepIndices].sort((a, b) => a - b);
+  const stepIndices = [
+    ...new Set(
+      header
+        .map(h => h.match(/^steps\/step\/(\d+)\/action$/))
+        .filter(Boolean)
+        .map(m => Number(m![1])),
+    ),
+  ].sort((a, b) => a - b);
 
   const cases: QaseCase[] = [];
 
@@ -223,18 +249,22 @@ function parseCasesFromCsv(csvInput: string, stats: QaseCsvExportStats): QaseCas
     const title = fields[titleIdx]?.trim() ?? '';
     if (!title) continue;
 
-    let description = descIdx >= 0 ? fields[descIdx]?.trim() ?? '' : '';
+    let description = col('description') >= 0 ? fields[col('description')]?.trim() ?? '' : '';
     if (!description) description = title;
 
-    const preconditions = preIdx >= 0 ? fields[preIdx]?.trim() : '';
-    const priority = normalizePriority(priIdx >= 0 ? fields[priIdx] : undefined, stats);
+    const priority = normalizePriority(
+      col('priority') >= 0 ? fields[col('priority')] : undefined,
+      stats,
+    );
+    const preconditions =
+      col('preconditions') >= 0 ? fields[col('preconditions')]?.trim() : '';
 
-    const tags = tagCols
-      .map(({ i }) => fields[i]?.trim() ?? '')
-      .filter(Boolean);
+    const tags = normalizeTags(
+      tagCols.map(({ i }) => fields[i]?.trim() ?? '').filter(Boolean),
+    );
 
     const steps: QaseStep[] = [];
-    for (const si of sortedSteps) {
+    for (const si of stepIndices) {
       const aIdx = col(`steps/step/${si}/action`);
       const eIdx = col(`steps/step/${si}/expected_result`);
       const action = aIdx >= 0 ? fields[aIdx]?.trim() ?? '' : '';
@@ -251,7 +281,7 @@ function parseCasesFromCsv(csvInput: string, stats: QaseCsvExportStats): QaseCas
       description,
       preconditions: preconditions || undefined,
       priority,
-      tags: tags.length ? tags : undefined,
+      tags,
       steps,
     });
   }
@@ -286,9 +316,11 @@ function parseCasesFromXmlDocument(doc: Document, stats: QaseCsvExportStats): Qa
     );
 
     const preconditions = textContent(caseEl.querySelector(':scope > preconditions')) || undefined;
-    const tags = Array.from(caseEl.querySelectorAll(':scope > tags > tag'))
-      .map(t => textContent(t))
-      .filter(Boolean);
+    const tags = normalizeTags(
+      Array.from(caseEl.querySelectorAll(':scope > tags > tag'))
+        .map(t => textContent(t))
+        .filter(Boolean),
+    );
 
     const steps: QaseStep[] = [];
     for (const stepEl of caseEl.querySelectorAll(':scope > steps > step')) {
@@ -306,7 +338,7 @@ function parseCasesFromXmlDocument(doc: Document, stats: QaseCsvExportStats): Qa
       description,
       preconditions,
       priority,
-      tags: tags.length ? tags : undefined,
+      tags,
       steps,
     });
   }
@@ -315,7 +347,6 @@ function parseCasesFromXmlDocument(doc: Document, stats: QaseCsvExportStats): Qa
   return cases;
 }
 
-/** Converte XML legado ou re-sanitiza CSV para o padrão Qase CSV. */
 export function fixQaseImportToCsv(
   input: string,
   filename = QASE_CSV_FILENAME,
@@ -365,3 +396,6 @@ export function downloadFixedQaseCsv(
   triggerDownload(csv, filename);
   return stats;
 }
+
+// Compat: testes ou imports antigos
+export const buildQaseCsvHeader = () => QASE_CSV_HEADER.split(',');

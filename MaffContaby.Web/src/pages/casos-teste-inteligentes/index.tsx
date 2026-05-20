@@ -7,6 +7,7 @@ import {
   downloadFixedQaseCsv,
   downloadQaseCsv,
   formatQaseCsvExportSummary,
+  QASE_CSV_IMPORT_HINT,
   type QaseCsvExportStats,
 } from '@/utils/qase-csv-export';
 import {
@@ -221,8 +222,11 @@ export function CasosTesteInteligentesPage() {
       <div className="page__header">
         <h1 className="title">Casos de Testes Inteligentes</h1>
         <div className="subtitle">
-          Gere casos de teste completos com IA (Gemini) para importação no Qase.io
+          Gere casos de teste completos com IA (Gemini) e exporte CSV para importação no Qase.io
         </div>
+        <p className="muted" style={{ marginTop: 8, fontSize: 13, maxWidth: 720 }}>
+          {QASE_CSV_IMPORT_HINT}
+        </p>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
