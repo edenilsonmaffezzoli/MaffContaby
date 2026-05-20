@@ -4,11 +4,11 @@ import { gerarCasoTeste } from '@/services/casos-teste-service';
 import type { ImageInput, QaseCase, SourceFileInput } from '@/types/casos-teste';
 import { openCasosTestePdf } from '@/utils/casos-teste-pdf';
 import {
-  downloadFixedQaseXml,
-  downloadQaseXml,
-  formatQaseXmlFixSummary,
-  type QaseXmlFixStats,
-} from '@/utils/qase-xml-export';
+  downloadFixedQaseCsv,
+  downloadQaseCsv,
+  formatQaseCsvExportSummary,
+  type QaseCsvExportStats,
+} from '@/utils/qase-csv-export';
 import {
   fileToBase64,
   readSourceFromDirectoryPicker,
@@ -62,8 +62,8 @@ export function CasosTesteInteligentesPage() {
 
   const httpClient = useHttpClient();
   const folderInputRef = useRef<HTMLInputElement | null>(null);
-  const xmlFixInputRef = useRef<HTMLInputElement | null>(null);
-  const [exportSummary, setExportSummary] = useState<QaseXmlFixStats | null>(null);
+  const csvFixInputRef = useRef<HTMLInputElement | null>(null);
+  const [exportSummary, setExportSummary] = useState<QaseCsvExportStats | null>(null);
 
   const [systemPath, setSystemPath] = useState('');
   const [sourcePathLabel, setSourcePathLabel] = useState('');
@@ -174,30 +174,30 @@ export function CasosTesteInteligentesPage() {
     if (folderInputRef.current) folderInputRef.current.value = '';
   }
 
-  function handleExportXml() {
+  function handleExportCsv() {
     if (!cases.length) {
       alert('Não há casos estruturados para exportar. Gere novamente com a IA.');
       return;
     }
     try {
-      const stats = downloadQaseXml(cases);
+      const stats = downloadQaseCsv(cases);
       setExportSummary(stats);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao gerar XML.';
+      const msg = e instanceof Error ? e.message : 'Erro ao gerar CSV.';
       alert(msg);
     }
   }
 
-  async function handleFixExistingXml(file: File) {
+  async function handleFixExistingFile(file: File) {
     try {
       const text = await file.text();
-      const stats = downloadFixedQaseXml(text);
+      const stats = downloadFixedQaseCsv(text);
       setExportSummary(stats);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao corrigir XML.';
+      const msg = e instanceof Error ? e.message : 'Erro ao corrigir arquivo.';
       alert(msg);
     } finally {
-      if (xmlFixInputRef.current) xmlFixInputRef.current.value = '';
+      if (csvFixInputRef.current) csvFixInputRef.current.value = '';
     }
   }
 
@@ -351,24 +351,24 @@ export function CasosTesteInteligentesPage() {
             <button type="button" className="button" onClick={handleClearAll}>
               Limpar Tudo
             </button>
-            <button type="button" className="button" onClick={handleExportXml} disabled={!cases.length}>
-              Exportar XML para Qase
+            <button type="button" className="button" onClick={handleExportCsv} disabled={!cases.length}>
+              Exportar CSV para Qase
             </button>
             <button
               type="button"
               className="button"
-              onClick={() => xmlFixInputRef.current?.click()}
+              onClick={() => csvFixInputRef.current?.click()}
             >
-              Corrigir XML existente
+              Corrigir CSV/XML existente
             </button>
             <input
-              ref={xmlFixInputRef}
+              ref={csvFixInputRef}
               type="file"
-              accept=".xml,application/xml,text/xml"
+              accept=".csv,.xml,text/csv,application/xml,text/xml"
               style={{ display: 'none' }}
               onChange={e => {
                 const file = e.target.files?.[0];
-                if (file) void handleFixExistingXml(file);
+                if (file) void handleFixExistingFile(file);
               }}
             />
             <button type="button" className="button button--primary" onClick={handleExportPdf} disabled={!markdown.trim()}>
@@ -387,13 +387,13 @@ export function CasosTesteInteligentesPage() {
                 background: 'var(--surface-2, #f5f5f5)',
               }}
             >
-              {formatQaseXmlFixSummary(exportSummary)}
+              {formatQaseCsvExportSummary(exportSummary)}
             </pre>
           ) : null}
 
           {!cases.length && markdown ? (
             <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
-              O XML usa a estrutura retornada pela IA. Se você editar apenas o markdown, regenere para atualizar o export Qase.
+              O CSV usa a estrutura retornada pela IA. Se você editar apenas o markdown, regenere para atualizar o export Qase.
             </p>
           ) : null}
 
@@ -425,7 +425,7 @@ export function CasosTesteInteligentesPage() {
 
           {cases.length > 0 ? (
             <p className="muted" style={{ marginTop: 10, fontSize: 13 }}>
-              {cases.length} caso(s) prontos para importação no Qase (Source: Qase → XML).
+              {cases.length} caso(s) prontos para importação no Qase (Source: Qase → CSV).
             </p>
           ) : null}
         </div>

@@ -17,7 +17,7 @@ export function buildGerarCasoTestePrompt(
           .map(f => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
           .join('\n\n');
 
-  return `Você é um especialista em QA e testes manuais/automatizados. Gere casos de teste completos para importação no Qase.io (formato classic: action + expected_result por passo).
+  return `Você é um especialista em QA e testes manuais/automatizados. Gere casos de teste completos para importação no Qase.io via CSV (formato classic: action + expected_result por passo).
 
 ## Contexto
 - Path do sistema (módulo/rota/feature): ${systemPath}
