@@ -45,8 +45,7 @@ Retorne APENAS um objeto JSON válido com esta estrutura:
       "title": "string",
       "description": "string opcional",
       "preconditions": "string opcional",
-      "priority": "low|medium|high|critical opcional",
-      "severity": "minor|normal|major|critical|blocker opcional",
+      "priority": "low|medium|high opcional",
       "tags": ["string"],
       "steps": [
         { "action": "string", "expected_result": "string", "data": "string opcional" }
