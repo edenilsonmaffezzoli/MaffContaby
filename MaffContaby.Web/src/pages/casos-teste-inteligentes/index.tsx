@@ -3,7 +3,12 @@ import { useHttpClient } from '@/hooks/use-http-client';
 import { gerarCasoTeste } from '@/services/casos-teste-service';
 import type { ImageInput, QaseCase, SourceFileInput } from '@/types/casos-teste';
 import { openCasosTestePdf } from '@/utils/casos-teste-pdf';
-import { downloadQaseXml } from '@/utils/qase-xml-export';
+import {
+  downloadFixedQaseXml,
+  downloadQaseXml,
+  formatQaseXmlFixSummary,
+  type QaseXmlFixStats,
+} from '@/utils/qase-xml-export';
 import {
   fileToBase64,
   readSourceFromDirectoryPicker,
@@ -57,6 +62,8 @@ export function CasosTesteInteligentesPage() {
 
   const httpClient = useHttpClient();
   const folderInputRef = useRef<HTMLInputElement | null>(null);
+  const xmlFixInputRef = useRef<HTMLInputElement | null>(null);
+  const [exportSummary, setExportSummary] = useState<QaseXmlFixStats | null>(null);
 
   const [systemPath, setSystemPath] = useState('');
   const [sourcePathLabel, setSourcePathLabel] = useState('');
@@ -162,6 +169,7 @@ export function CasosTesteInteligentesPage() {
     setMarkdown('');
     setCases([]);
     setMetaInfo(null);
+    setExportSummary(null);
     gerarMutation.reset();
     if (folderInputRef.current) folderInputRef.current.value = '';
   }
@@ -171,7 +179,26 @@ export function CasosTesteInteligentesPage() {
       alert('Não há casos estruturados para exportar. Gere novamente com a IA.');
       return;
     }
-    downloadQaseXml(cases);
+    try {
+      const stats = downloadQaseXml(cases);
+      setExportSummary(stats);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao gerar XML.';
+      alert(msg);
+    }
+  }
+
+  async function handleFixExistingXml(file: File) {
+    try {
+      const text = await file.text();
+      const stats = downloadFixedQaseXml(text);
+      setExportSummary(stats);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao corrigir XML.';
+      alert(msg);
+    } finally {
+      if (xmlFixInputRef.current) xmlFixInputRef.current.value = '';
+    }
   }
 
   function handleExportPdf() {
@@ -327,10 +354,42 @@ export function CasosTesteInteligentesPage() {
             <button type="button" className="button" onClick={handleExportXml} disabled={!cases.length}>
               Exportar XML para Qase
             </button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => xmlFixInputRef.current?.click()}
+            >
+              Corrigir XML existente
+            </button>
+            <input
+              ref={xmlFixInputRef}
+              type="file"
+              accept=".xml,application/xml,text/xml"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (file) void handleFixExistingXml(file);
+              }}
+            />
             <button type="button" className="button button--primary" onClick={handleExportPdf} disabled={!markdown.trim()}>
               Gerar PDF
             </button>
           </div>
+
+          {exportSummary ? (
+            <pre
+              className="card"
+              style={{
+                marginBottom: 12,
+                padding: 12,
+                fontSize: 13,
+                whiteSpace: 'pre-wrap',
+                background: 'var(--surface-2, #f5f5f5)',
+              }}
+            >
+              {formatQaseXmlFixSummary(exportSummary)}
+            </pre>
+          ) : null}
 
           {!cases.length && markdown ? (
             <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
