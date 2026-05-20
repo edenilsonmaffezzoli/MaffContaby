@@ -7,6 +7,7 @@ import { PessoasPage } from '@/pages/cadastro/pessoas';
 import { FinancasPage } from '@/pages/financas';
 import { ImportarPage } from '@/pages/importar';
 import { MovimentacoesPage } from '@/pages/movimentacoes';
+import { CasosTesteInteligentesPage } from '@/pages/casos-teste-inteligentes';
 import { RelatoriosPage } from '@/pages/relatorios';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
@@ -29,6 +30,7 @@ export function AppRoutes() {
         <Route path="/financas" element={<FinancasPage />} />
         <Route path="/relatorios" element={<RelatoriosPage />} />
         <Route path="/importar" element={<ImportarPage />} />
+        <Route path="/casos-teste-inteligentes" element={<CasosTesteInteligentesPage />} />
         <Route path="/gdp" element={<GdpPage />} />
         <Route path="/usuarios" element={<UsersPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
