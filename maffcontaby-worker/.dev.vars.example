@@ -1,7 +1,7 @@
 # Copie para .dev.vars (não commitar) e preencha os valores.
 # Produção: wrangler secret put GEMINI_API_KEY
 
-GEMINI_API_KEY=AIzaSyD_A7BUNwVB8_MzUwwJMa4zQfkLR-aekDc
+GEMINI_API_KEY=
 GEMINI_MODEL=gemini-2.5-flash
 GEMINI_MAX_INPUT_CHARS=150000
 GEMINI_TIMEOUT_SECONDS=180
