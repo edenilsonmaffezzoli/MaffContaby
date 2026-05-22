@@ -505,7 +505,7 @@ function parseCasesFromV2Csv(csvInput: string, stats: QaseCsvExportStats): QaseC
 }
 
 function parseCasesFromCsv(csvInput: string, stats: QaseCsvExportStats): QaseCase[] {
-  const firstLine = csvInput.replace(/^\uFEFF/, '').split(/\r?\n')[0]?.trim() ?? '';
+  const firstLine = csvInput.replace(/^\uFEFF/, '').split(/\r?\n/)[0]?.trim() ?? '';
   if (firstLine.startsWith('v2.id') || firstLine.includes('suite_without_cases')) {
     return parseCasesFromV2Csv(csvInput, stats);
   }
