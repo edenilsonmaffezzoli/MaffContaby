@@ -30,6 +30,8 @@ export type QaseCase = {
   steps: QaseStep[];
   priority?: string;
   severity?: string;
+  suite?: string;
+  subsuite?: string;
   tags?: string[];
 };
 
@@ -42,6 +44,8 @@ export type GerarCasoTesteResponse = {
     model: string;
     truncated: boolean;
     filesIncluded: number;
+    suitesUsed: string[];
+    groupingWarning?: string;
   };
 };
 

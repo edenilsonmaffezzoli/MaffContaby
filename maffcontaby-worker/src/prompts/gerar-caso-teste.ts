@@ -1,8 +1,5 @@
 import type { GerarCasoTesteRequest, SourceFileInput } from '../types/gerar-caso-teste';
 
-const QASE_CSV_HEADER =
-  'title,description,preconditions,priority,tags/tag/0,tags/tag/1,tags/tag/2,tags/tag/3,steps/step/0/action,steps/step/0/expected_result,steps/step/1/action,steps/step/1/expected_result,steps/step/2/action,steps/step/2/expected_result,steps/step/3/action,steps/step/3/expected_result,steps/step/4/action,steps/step/4/expected_result,steps/step/5/action,steps/step/5/expected_result,steps/step/6/action,steps/step/6/expected_result,tags/tag/4';
-
 export function buildGerarCasoTestePrompt(
   request: GerarCasoTesteRequest,
   files: SourceFileInput[],
@@ -96,13 +93,23 @@ Use código-fonte e imagens anexadas apenas como referência para entender o neg
 
 ---
 
-## ORGANIZAÇÃO DOS TESTES
+## ORGANIZAÇÃO DOS TESTES (OBRIGATÓRIO — NÃO LINEAR)
 
-Organize os casos em Suites e SubSuites (campos suite e subsuite no JSON).
+NÃO gere uma lista única sequencial (CT001, CT002…) sem mudar de suite. Cada assunto/módulo do sistema deve ter sua própria suite.
 
-Evite: duplicidade, cenários repetidos, casos excessivamente técnicos, cenários genéricos demais.
+- Preencha **suite** (assunto/módulo) e **subsuite** (fluxo dentro do módulo) em CADA caso do JSON.
+- Ordene o array **cases[]** agrupado: todos os casos da mesma suite/subsuite juntos, depois o próximo assunto.
+- O assunto deve estar em **suite**, não repetido no título (evite títulos genéricos iguais).
+- Use **subsuite** quando houver ≥ 3 casos no mesmo assunto com fluxos diferentes (ex.: positivo/negativo, menu vs rodapé).
 
-Use nomes profissionais e padronizados.
+Exemplo (site institucional):
+- suite **Navegação** → casos de menu (Página inicial, Sobre, Serviços, Eventos, Contato)
+- suite **Conteúdo e serviços** → Sobre Nós, listagem de serviços, detalhes, galeria, depoimentos
+- suite **Formulário de contato** → envio válido, campos obrigatórios, e-mail inválido
+
+Evite: duplicidade, cenários repetidos, casos excessivamente técnicos, uma única suite para todo o sistema.
+
+Use nomes profissionais e padronizados em português (Brasil).
 
 ---
 
@@ -126,19 +133,16 @@ ESCREVER: "Ao clicar em Salvar, o sistema deve concluir o cadastro"
 
 ## FORMATO DE EXPORTAÇÃO — CSV QASE (não XML)
 
-IMPORTANTE: o caso de teste, não deve ser linear, ele tem que seguir a hierarquia de testes e subtestes.
+IMPORTANTE: o caso de teste não deve ser linear; deve seguir hierarquia suite → subsuite → casos.
 
-A aplicação converterá sua resposta em CSV para importação no Qase (Source: Qase.io → CSV).
+A aplicação converterá sua resposta em CSV oficial Qase.io (v2) com pastas **suite** e **subsuite** no repositório.
 
-Cada caso no JSON será mapeado para uma linha com estas colunas (máx. 7 passos e 5 tags por caso):
-${QASE_CSV_HEADER}
-
-Regras do CSV:
+Regras:
+- **suite** e **subsuite** no JSON são obrigatórios para organização (não coloque o assunto só em tags).
 - priority: apenas low, medium ou high (nunca critical)
-- tags: slugs curtos em minúsculas, sem espaços (use hífen), ex.: login, formulario, happy-path
-- tags/tag/0 e tags/tag/1: reserve para suite e subsuite (slug da suite e da subsuite)
-- até 7 pares action + expected_result por caso
-- title, description e preconditions obrigatórios e em português (Brasil)
+- tags: apenas labels extras (slugs), ex.: happy-path, regressao — não substituem suite/subsuite
+- até 7 passos por caso (action + expected_result)
+- title, description e preconditions obrigatórios em português (Brasil)
 
 ---
 
@@ -163,6 +167,8 @@ Antes de finalizar:
 - cada caso com ao menos 1 passo completo (action + expected_result)
 - prioridades válidas (low, medium, high)
 - no máximo 7 passos por caso
+- pelo menos 2 suites distintas quando houver 6 ou mais casos
+- array cases[] ordenado por suite, depois subsuite, depois título
 
 ---
 
