@@ -44,3 +44,9 @@ export type GerarCasoTesteResponse = {
     filesIncluded: number;
   };
 };
+
+export type GerarCasoTesteErrorResponse = {
+  ok: false;
+  error: string;
+  prompt?: string;
+};

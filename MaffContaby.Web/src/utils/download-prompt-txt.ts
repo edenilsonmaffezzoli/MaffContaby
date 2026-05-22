@@ -1,3 +1,12 @@
+import type { GerarCasoTesteErrorResponse } from '@/types/casos-teste';
+
+export function extractPromptFromGerarError(error: unknown): string {
+  const data = (error as { response?: { data?: unknown } })?.response?.data;
+  if (!data || typeof data !== 'object' || data === null) return '';
+  const prompt = (data as GerarCasoTesteErrorResponse).prompt;
+  return typeof prompt === 'string' ? prompt.trim() : '';
+}
+
 function promptFilename() {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');

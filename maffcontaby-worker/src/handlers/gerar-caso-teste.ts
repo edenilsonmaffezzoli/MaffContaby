@@ -2,6 +2,7 @@ import { callGeminiJson, type GeminiImagePart } from '../gemini-client';
 import { buildGerarCasoTestePrompt } from '../prompts/gerar-caso-teste';
 import type {
   GeminiAiResult,
+  GerarCasoTesteErrorResponse,
   GerarCasoTesteRequest,
   GerarCasoTesteResponse,
   QaseCase,
@@ -65,6 +66,20 @@ function formatPromptForDownload(
     return `- ${label} (${normalizeMime(img.mimeType)})`;
   });
   return `${prompt}\n\n---\nImagens enviadas ao Gemini (não incluídas neste arquivo): ${images.length}\n${lines.join('\n')}`;
+}
+
+function gerarCasoTesteError(
+  message: string,
+  status: number,
+  promptText: string,
+  images: Array<{ mimeType: string; name?: string }>,
+): Response {
+  const body: GerarCasoTesteErrorResponse = {
+    ok: false,
+    error: message,
+    prompt: formatPromptForDownload(promptText, images),
+  };
+  return json(body, { status });
 }
 
 function filePriority(path: string, systemPath: string) {
@@ -326,6 +341,7 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
   }));
 
   const prompt = buildGerarCasoTestePrompt(req, files, truncated, geminiImages.length);
+  const reqImages = req.images ?? [];
 
   let rawJson: string;
   try {
@@ -337,9 +353,9 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Erro ao chamar Gemini';
     if (msg.includes('Timeout') || msg.includes('timeout') || msg.includes('aborted')) {
-      return text('Tempo esgotado ao gerar casos de teste (IA)', 504);
+      return gerarCasoTesteError('Tempo esgotado ao gerar casos de teste (IA)', 504, prompt, reqImages);
     }
-    return json({ ok: false, error: msg }, { status: 502 });
+    return gerarCasoTesteError(msg, 502, prompt, reqImages);
   }
 
   let result: GeminiAiResult;
@@ -347,18 +363,18 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
     result = parseGeminiResult(rawJson);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Resposta inválida da IA';
-    return json({ ok: false, error: msg }, { status: 502 });
+    return gerarCasoTesteError(msg, 502, prompt, reqImages);
   }
 
   if (result.cases.length === 0) {
-    return json({ ok: false, error: 'A IA não retornou casos de teste válidos' }, { status: 502 });
+    return gerarCasoTesteError('A IA não retornou casos de teste válidos', 502, prompt, reqImages);
   }
 
   const response: GerarCasoTesteResponse = {
     ok: true,
     markdown: result.markdown,
     cases: result.cases,
-    prompt: formatPromptForDownload(prompt, req.images ?? []),
+    prompt: formatPromptForDownload(prompt, reqImages),
     meta: {
       model,
       truncated,
