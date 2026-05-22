@@ -54,6 +54,19 @@ function normalizeMime(mime: string) {
   return m;
 }
 
+/** Prompt textual para export/download; imagens vão separadas ao Gemini (base64). */
+function formatPromptForDownload(
+  prompt: string,
+  images: Array<{ mimeType: string; name?: string }>,
+): string {
+  if (!images.length) return prompt;
+  const lines = images.map((img, i) => {
+    const label = img.name?.trim() || `imagem-${i + 1}`;
+    return `- ${label} (${normalizeMime(img.mimeType)})`;
+  });
+  return `${prompt}\n\n---\nImagens enviadas ao Gemini (não incluídas neste arquivo): ${images.length}\n${lines.join('\n')}`;
+}
+
 function filePriority(path: string, systemPath: string) {
   const lower = path.toLowerCase();
   let score = 0;
@@ -345,6 +358,7 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
     ok: true,
     markdown: result.markdown,
     cases: result.cases,
+    prompt: formatPromptForDownload(prompt, req.images ?? []),
     meta: {
       model,
       truncated,

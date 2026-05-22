@@ -37,6 +37,8 @@ export type GerarCasoTesteResponse = {
   ok: true;
   markdown: string;
   cases: QaseCase[];
+  /** Texto exato enviado ao Gemini (parte textual; imagens listadas no rodapé). */
+  prompt: string;
   meta: {
     model: string;
     truncated: boolean;

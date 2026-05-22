@@ -3,6 +3,7 @@ import { useHttpClient } from '@/hooks/use-http-client';
 import { gerarCasoTeste } from '@/services/casos-teste-service';
 import type { ImageInput, QaseCase, SourceFileInput } from '@/types/casos-teste';
 import { openCasosTestePdf } from '@/utils/casos-teste-pdf';
+import { downloadPromptTxt } from '@/utils/download-prompt-txt';
 import {
   downloadFixedQaseCsv,
   downloadQaseCsv,
@@ -74,6 +75,7 @@ export function CasosTesteInteligentesPage() {
   const [markdown, setMarkdown] = useState('');
   const [cases, setCases] = useState<QaseCase[]>([]);
   const [metaInfo, setMetaInfo] = useState<string | null>(null);
+  const [lastPrompt, setLastPrompt] = useState('');
   const [folderLoading, setFolderLoading] = useState(false);
 
   const gerarMutation = useMutation({
@@ -96,6 +98,7 @@ export function CasosTesteInteligentesPage() {
     onSuccess: data => {
       setMarkdown(data.markdown);
       setCases(data.cases);
+      setLastPrompt(data.prompt ?? '');
       setMetaInfo(
         `Modelo: ${data.meta.model} · Arquivos: ${data.meta.filesIncluded}${data.meta.truncated ? ' · Código truncado' : ''}`,
       );
@@ -170,6 +173,7 @@ export function CasosTesteInteligentesPage() {
     setMarkdown('');
     setCases([]);
     setMetaInfo(null);
+    setLastPrompt('');
     setExportSummary(null);
     gerarMutation.reset();
     if (folderInputRef.current) folderInputRef.current.value = '';
@@ -377,6 +381,15 @@ export function CasosTesteInteligentesPage() {
             />
             <button type="button" className="button button--primary" onClick={handleExportPdf} disabled={!markdown.trim()}>
               Gerar PDF
+            </button>
+            <button
+              type="button"
+              className="button"
+              disabled={!lastPrompt.trim()}
+              onClick={() => downloadPromptTxt(lastPrompt)}
+              title="Baixa o prompt exato enviado à IA na última geração"
+            >
+              Baixar prompt (.txt)
             </button>
           </div>
 

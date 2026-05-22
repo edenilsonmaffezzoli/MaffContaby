@@ -37,6 +37,7 @@ export type GerarCasoTesteResponse = {
   ok: true;
   markdown: string;
   cases: QaseCase[];
+  prompt: string;
   meta: {
     model: string;
     truncated: boolean;
