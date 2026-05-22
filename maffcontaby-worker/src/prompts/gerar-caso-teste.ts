@@ -126,6 +126,8 @@ ESCREVER: "Ao clicar em Salvar, o sistema deve concluir o cadastro"
 
 ## FORMATO DE EXPORTAÇÃO — CSV QASE (não XML)
 
+IMPORTANTE: o caso de teste, não deve ser linear, ele tem que seguir a hierarquia de testes e subtestes.
+
 A aplicação converterá sua resposta em CSV para importação no Qase (Source: Qase.io → CSV).
 
 Cada caso no JSON será mapeado para uma linha com estas colunas (máx. 7 passos e 5 tags por caso):
