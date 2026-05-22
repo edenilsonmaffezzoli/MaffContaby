@@ -30,6 +30,10 @@ export type QaseCase = {
   steps: QaseStep[];
   priority?: string;
   severity?: string;
+  /** Assunto/módulo — pasta no Qase (suite pai). */
+  suite?: string;
+  /** Fluxo dentro do módulo — subsuite no Qase. */
+  subsuite?: string;
   tags?: string[];
 };
 
@@ -43,6 +47,8 @@ export type GerarCasoTesteResponse = {
     model: string;
     truncated: boolean;
     filesIncluded: number;
+    suitesUsed: string[];
+    groupingWarning?: string;
   };
 };
 
@@ -56,4 +62,6 @@ export type GerarCasoTesteErrorResponse = {
 export type GeminiAiResult = {
   markdown: string;
   cases: QaseCase[];
+  suitesUsed: string[];
+  groupingWarning?: string;
 };

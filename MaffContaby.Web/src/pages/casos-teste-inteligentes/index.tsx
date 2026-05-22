@@ -99,8 +99,13 @@ export function CasosTesteInteligentesPage() {
       setMarkdown(data.markdown);
       setCases(data.cases);
       setLastPrompt(data.prompt ?? '');
+      const suites =
+        data.meta.suitesUsed?.length > 0
+          ? ` · Suites: ${data.meta.suitesUsed.join(', ')}`
+          : '';
+      const grouping = data.meta.groupingWarning ? ` · ${data.meta.groupingWarning}` : '';
       setMetaInfo(
-        `Modelo: ${data.meta.model} · Arquivos: ${data.meta.filesIncluded}${data.meta.truncated ? ' · Código truncado' : ''}`,
+        `Modelo: ${data.meta.model} · Arquivos: ${data.meta.filesIncluded}${data.meta.truncated ? ' · Código truncado' : ''}${suites}${grouping}`,
       );
     },
     onError: error => {
@@ -376,7 +381,13 @@ export function CasosTesteInteligentesPage() {
             <button type="button" className="button" onClick={handleClearAll}>
               Limpar Tudo
             </button>
-            <button type="button" className="button" onClick={handleExportCsv} disabled={!cases.length}>
+            <button
+              type="button"
+              className="button"
+              onClick={handleExportCsv}
+              disabled={!cases.length}
+              title="CSV Qase.io v2 com pastas por assunto (suite/subsuite)"
+            >
               Exportar CSV para Qase
             </button>
             <button

@@ -1,5 +1,6 @@
 /**
- * Converte XML legado ou re-sanitiza CSV para o padrão Qase CSV (23 colunas).
+ * Converte XML legado ou CSV antigo para leitura local (saída legado 23 colunas).
+ * A exportação na aplicação web usa CSV Qase.io v2 com suite_id/suite_parent_id.
  * Uso: node scripts/fix-qase-csv.mjs [entrada.csv|entrada.xml]
  */
 import { readFileSync, writeFileSync } from 'node:fs';

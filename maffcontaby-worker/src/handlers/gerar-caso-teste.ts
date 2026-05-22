@@ -1,4 +1,5 @@
 import { callGeminiJson, type GeminiImagePart } from '../gemini-client';
+import { groupCasesBySubject } from '../group-cases-by-subject';
 import { buildGerarCasoTestePrompt } from '../prompts/gerar-caso-teste';
 import type {
   GeminiAiResult,
@@ -21,7 +22,7 @@ export type GerarCasoTesteEnv = {
 const MAX_IMAGES = 8;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const DEFAULT_MAX_INPUT_CHARS = 150_000;
-const DEFAULT_MODEL = 'gemini-3.5-flash';
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 const DEFAULT_TIMEOUT_SECONDS = 180;
 
 const CODE_EXT_PRIORITY = ['.tsx', '.ts', '.cs', '.jsx', '.js', '.vue', '.py', '.java', '.go'];
@@ -152,17 +153,14 @@ function slugTag(value: string): string {
     .replace(/[^a-z0-9_-]/g, '');
 }
 
-function buildCaseTags(o: Record<string, unknown>): string[] | undefined {
+function buildExtraTags(o: Record<string, unknown>, suite: string, subsuite: string): string[] | undefined {
+  const reserved = new Set([slugTag(suite), slugTag(subsuite)].filter(Boolean));
   const tags: string[] = [];
-  const suite = typeof o.suite === 'string' ? slugTag(o.suite) : '';
-  const subsuite = typeof o.subsuite === 'string' ? slugTag(o.subsuite) : '';
-  if (suite) tags.push(suite);
-  if (subsuite) tags.push(subsuite);
   if (Array.isArray(o.tags)) {
     for (const t of o.tags) {
       if (typeof t !== 'string' || !t.trim()) continue;
       const slug = slugTag(t);
-      if (slug && !tags.includes(slug)) tags.push(slug);
+      if (slug && !reserved.has(slug) && !tags.includes(slug)) tags.push(slug);
     }
   }
   return tags.length ? tags : undefined;
@@ -204,12 +202,17 @@ function normalizeCases(raw: unknown): QaseCase[] {
 
     if (steps.length === 0) continue;
 
+    const suite = typeof o.suite === 'string' ? o.suite.trim() : '';
+    const subsuite = typeof o.subsuite === 'string' ? o.subsuite.trim() : '';
+
     cases.push({
       title,
       description: typeof o.description === 'string' ? o.description.trim() : undefined,
       preconditions: typeof o.preconditions === 'string' ? o.preconditions.trim() : undefined,
       priority: typeof o.priority === 'string' ? o.priority.trim() : undefined,
-      tags: buildCaseTags(o),
+      suite: suite || undefined,
+      subsuite: subsuite || undefined,
+      tags: buildExtraTags(o, suite, subsuite),
       steps,
     });
   }
@@ -248,20 +251,34 @@ function formatAnalysisMarkdown(analysis: Record<string, unknown>): string {
   return lines.join('\n');
 }
 
+function extractModulos(analysis: Record<string, unknown> | undefined): string[] {
+  if (!analysis || !Array.isArray(analysis.modulos)) return [];
+  return analysis.modulos.filter((m): m is string => typeof m === 'string' && Boolean(m.trim()));
+}
+
 function parseGeminiResult(raw: string): GeminiAiResult {
   const parsed = JSON.parse(stripJsonFence(raw)) as Record<string, unknown>;
   let markdown = typeof parsed.markdown === 'string' ? parsed.markdown.trim() : '';
-  const cases = normalizeCases(parsed.cases);
-  if (!markdown && cases.length === 0) {
+  const analysis =
+    parsed.analysis && typeof parsed.analysis === 'object'
+      ? (parsed.analysis as Record<string, unknown>)
+      : undefined;
+  const modulos = extractModulos(analysis);
+  const normalized = normalizeCases(parsed.cases);
+  const grouped = groupCasesBySubject(normalized, modulos);
+
+  if (!markdown && grouped.cases.length === 0) {
     throw new Error('JSON da IA sem markdown e sem cases');
   }
-  if (parsed.analysis && typeof parsed.analysis === 'object') {
-    const analysisBlock = formatAnalysisMarkdown(parsed.analysis as Record<string, unknown>);
+  if (analysis) {
+    const analysisBlock = formatAnalysisMarkdown(analysis);
     markdown = markdown ? `${analysisBlock}\n\n---\n\n${markdown}` : analysisBlock;
   }
   return {
-    markdown: markdown || buildFallbackMarkdown(cases),
-    cases,
+    markdown: markdown || buildFallbackMarkdown(grouped.cases),
+    cases: grouped.cases,
+    suitesUsed: grouped.suitesUsed,
+    groupingWarning: grouped.groupingWarning,
   };
 }
 
@@ -379,6 +396,8 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
       model,
       truncated,
       filesIncluded: files.length,
+      suitesUsed: result.suitesUsed,
+      groupingWarning: result.groupingWarning,
     },
   };
 
