@@ -21,7 +21,7 @@ export type GerarCasoTesteEnv = {
 const MAX_IMAGES = 8;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const DEFAULT_MAX_INPUT_CHARS = 150_000;
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+const DEFAULT_MODEL = 'gemini-3.5-flash';
 const DEFAULT_TIMEOUT_SECONDS = 180;
 
 const CODE_EXT_PRIORITY = ['.tsx', '.ts', '.cs', '.jsx', '.js', '.vue', '.py', '.java', '.go'];
