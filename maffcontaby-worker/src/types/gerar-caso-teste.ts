@@ -46,6 +46,13 @@ export type GerarCasoTesteResponse = {
   };
 };
 
+export type GerarCasoTesteErrorResponse = {
+  ok: false;
+  error: string;
+  /** Presente quando o prompt foi montado antes da falha (Gemini, parse, etc.). */
+  prompt?: string;
+};
+
 export type GeminiAiResult = {
   markdown: string;
   cases: QaseCase[];

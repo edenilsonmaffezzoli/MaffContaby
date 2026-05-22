@@ -3,7 +3,7 @@ import { useHttpClient } from '@/hooks/use-http-client';
 import { gerarCasoTeste } from '@/services/casos-teste-service';
 import type { ImageInput, QaseCase, SourceFileInput } from '@/types/casos-teste';
 import { openCasosTestePdf } from '@/utils/casos-teste-pdf';
-import { downloadPromptTxt } from '@/utils/download-prompt-txt';
+import { downloadPromptTxt, extractPromptFromGerarError } from '@/utils/download-prompt-txt';
 import {
   downloadFixedQaseCsv,
   downloadQaseCsv,
@@ -102,6 +102,10 @@ export function CasosTesteInteligentesPage() {
       setMetaInfo(
         `Modelo: ${data.meta.model} · Arquivos: ${data.meta.filesIncluded}${data.meta.truncated ? ' · Código truncado' : ''}`,
       );
+    },
+    onError: error => {
+      const prompt = extractPromptFromGerarError(error);
+      if (prompt) setLastPrompt(prompt);
     },
   });
 
@@ -338,9 +342,22 @@ export function CasosTesteInteligentesPage() {
         </button>
 
         {gerarMutation.isError ? (
-          <div className="alert alert--danger" style={{ marginTop: 12 }}>
-            {formatHttpError(gerarMutation.error)}
-            {!localStorage.getItem('gdp_token') ? ' Faça login em /login.' : null}
+          <div style={{ marginTop: 12 }}>
+            <div className="alert alert--danger">
+              {formatHttpError(gerarMutation.error)}
+              {!localStorage.getItem('gdp_token') ? ' Faça login em /login.' : null}
+            </div>
+            {lastPrompt.trim() ? (
+              <button
+                type="button"
+                className="button"
+                style={{ marginTop: 8 }}
+                onClick={() => downloadPromptTxt(lastPrompt)}
+                title="Baixa o prompt enviado à IA nesta tentativa (mesmo com falha)"
+              >
+                Baixar prompt (.txt)
+              </button>
+            ) : null}
           </div>
         ) : null}
 
@@ -349,11 +366,11 @@ export function CasosTesteInteligentesPage() {
         </div>
       </div>
 
-      {(markdown || gerarMutation.isSuccess) && (
+      {(markdown.trim() || gerarMutation.isSuccess || lastPrompt.trim()) && (
         <div className="card">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12, alignItems: 'center' }}>
             <h2 className="title" style={{ fontSize: '1.1rem', margin: 0, flex: '1 1 auto' }}>
-              Resultado
+              {markdown.trim() || cases.length ? 'Resultado' : 'Prompt da última tentativa'}
             </h2>
             {metaInfo ? <span className="muted" style={{ fontSize: 12 }}>{metaInfo}</span> : null}
             <button type="button" className="button" onClick={handleClearAll}>
@@ -414,31 +431,37 @@ export function CasosTesteInteligentesPage() {
             </p>
           ) : null}
 
-          <div className="casos-teste-editor" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, minHeight: 360 }}>
-            <div>
-              <label className="label">Markdown (editável)</label>
-              <textarea
-                className="input"
-                style={{
-                  width: '100%',
-                  minHeight: 320,
-                  fontFamily: 'ui-monospace, Consolas, monospace',
-                  fontSize: 13,
-                  resize: 'vertical',
-                }}
-                value={markdown}
-                onChange={e => setMarkdown(e.target.value)}
-              />
+          {markdown.trim() ? (
+            <div className="casos-teste-editor" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, minHeight: 360 }}>
+              <div>
+                <label className="label">Markdown (editável)</label>
+                <textarea
+                  className="input"
+                  style={{
+                    width: '100%',
+                    minHeight: 320,
+                    fontFamily: 'ui-monospace, Consolas, monospace',
+                    fontSize: 13,
+                    resize: 'vertical',
+                  }}
+                  value={markdown}
+                  onChange={e => setMarkdown(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">Pré-visualização</label>
+                <div
+                  className="casos-teste-preview card"
+                  style={{ minHeight: 320, maxHeight: 480, overflow: 'auto', padding: 14 }}
+                  dangerouslySetInnerHTML={{ __html: previewHtml }}
+                />
+              </div>
             </div>
-            <div>
-              <label className="label">Pré-visualização</label>
-              <div
-                className="casos-teste-preview card"
-                style={{ minHeight: 320, maxHeight: 480, overflow: 'auto', padding: 14 }}
-                dangerouslySetInnerHTML={{ __html: previewHtml }}
-              />
-            </div>
-          </div>
+          ) : lastPrompt.trim() && gerarMutation.isError ? (
+            <p className="muted" style={{ fontSize: 13 }}>
+              A geração falhou, mas o prompt enviado à IA está disponível para download acima ou no botão desta seção.
+            </p>
+          ) : null}
 
           {cases.length > 0 ? (
             <p className="muted" style={{ marginTop: 10, fontSize: 13 }}>
