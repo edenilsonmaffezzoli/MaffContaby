@@ -456,9 +456,6 @@ function parseCasesFromV2Csv(csvInput: string, stats: QaseCsvExportStats): QaseC
   const lines = csvInput.replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) throw new Error('CSV sem cabeçalho ou linhas de dados.');
 
-  const header = parseCsvLine(lines[0]);
-  const col = (name: string) => header.indexOf(name);
-
   const cases: QaseCase[] = [];
 
   for (let li = 1; li < lines.length; li++) {
