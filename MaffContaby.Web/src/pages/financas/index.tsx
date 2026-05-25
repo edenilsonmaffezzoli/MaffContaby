@@ -1,6 +1,6 @@
 import { useHttpClient } from '@/hooks/use-http-client';
 import { createAsset, deleteAsset, getAssets, updateAsset, type AssetDto } from '@/services/assets-service';
-import { formatCurrencyBRL } from '@/utils/format';
+import { formatCurrencyBRL, parseDecimalBRL } from '@/utils/format';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
@@ -145,7 +145,8 @@ function NovoAtivo(props: {
   const [saldo, setSaldo] = useState('');
   const [disponivelImediatamente, setDisponivelImediatamente] = useState(true);
 
-  const canSubmit = !props.disabled && name.trim() && Number.isFinite(Number(saldo));
+  const saldoParsed = parseDecimalBRL(saldo);
+  const canSubmit = !props.disabled && name.trim() && saldoParsed !== null;
 
   return (
     <div className="card">
@@ -192,7 +193,8 @@ function NovoAtivo(props: {
             type="button"
             disabled={!canSubmit}
             onClick={() => {
-              props.onCreate({ name: name.trim(), saldo: Number(saldo), disponivelImediatamente });
+              if (saldoParsed === null) return;
+              props.onCreate({ name: name.trim(), saldo: saldoParsed, disponivelImediatamente });
               setName('');
               setSaldo('');
               setDisponivelImediatamente(true);
@@ -224,6 +226,7 @@ function AssetRow(props: {
   const [name, setName] = useState(props.asset.name);
   const [saldo, setSaldo] = useState(String(props.asset.saldo));
   const [disponivelImediatamente, setDisponivelImediatamente] = useState(props.asset.disponivelImediatamente);
+  const saldoParsed = parseDecimalBRL(saldo);
 
   return (
     <div className="table__row table__row--fin">
@@ -305,10 +308,11 @@ function AssetRow(props: {
                 className="button button--primary button--sm"
                 type="button"
                 onClick={() => {
-                  props.onUpdate({ id: props.asset.id, name: name.trim(), saldo: Number(saldo), disponivelImediatamente });
+                  if (saldoParsed === null) return;
+                  props.onUpdate({ id: props.asset.id, name: name.trim(), saldo: saldoParsed, disponivelImediatamente });
                   setIsEditing(false);
                 }}
-                disabled={props.disabled || !name.trim() || !Number.isFinite(Number(saldo))}
+                disabled={props.disabled || !name.trim() || saldoParsed === null}
               >
                 Salvar
               </button>
