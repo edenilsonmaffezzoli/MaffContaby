@@ -1,10 +1,17 @@
+import type { FetchedPageContext } from '../fetch-system-url';
 import type { GerarCasoTesteRequest, SourceFileInput } from '../types/gerar-caso-teste';
+
+export type PageContextForPrompt = Pick<
+  FetchedPageContext,
+  'content' | 'fetched' | 'truncated' | 'fetchError'
+>;
 
 export function buildGerarCasoTestePrompt(
   request: GerarCasoTesteRequest,
   files: SourceFileInput[],
   truncated: boolean,
   imageCount: number,
+  pageContext?: PageContextForPrompt,
 ): string {
   const systemPath = request.systemPath?.trim() || '(não informado)';
   const sourceLabel = request.sourcePathLabel?.trim() || '(não informado)';
@@ -146,16 +153,26 @@ Regras:
 
 ---
 
+## COBERTURA MÍNIMA (obrigatório)
+
+- Identifique cada módulo/tela/menu relevante e crie casos específicos (evite um único caso genérico por módulo).
+- Site institucional ou landing: procure **pelo menos 20 casos** cobrindo navegação, conteúdo, serviços, sobre, contato e rodapé.
+- Sistema com login/CRUD: **pelo menos 3 casos por módulo principal** (fluxo feliz + validações visíveis simples).
+- Fluxos críticos (login, contato, orçamento, salvar cadastro): **pelo menos 2 passos** por caso quando fizer sentido.
+- Cada caso deve ter description e preconditions preenchidos (não repetir só o título).
+
 ## ENTREGAS (no JSON e no markdown)
 
-Além dos casos, inclua no markdown um resumo com:
-- módulos encontrados
-- quantidade de casos criados
-- funcionalidades identificadas
-- funcionalidades sem cobertura suficiente
-- possíveis riscos encontrados
+O campo **analysis** no JSON deve listar módulos, funcionalidades, lacunas e riscos.
 
-Se o sistema for grande, agrupe casos por suite/subsuite no markdown.
+O campo **markdown** deve ser um **resumo executivo curto** (não replique todos os passos dos casos — eles já estão em cases[]):
+- módulos encontrados
+- quantidade de casos criados (igual ao tamanho de cases[])
+- funcionalidades identificadas
+- lacunas de cobertura
+- riscos (bullets curtos)
+
+Se o sistema for grande, no markdown agrupe apenas por suite/subsuite com títulos dos casos (sem copiar todos os passos).
 
 ---
 
@@ -178,9 +195,10 @@ Antes de finalizar:
 - Caminho raiz do código fonte: ${sourceLabel}
 - Arquivos de código incluídos: ${files.length}${truncated ? ' (lista truncada por limite de tamanho)' : ''}
 - Imagens anexadas (prints/diagramas): ${imageCount}
+${pageContext?.fetched ? `- Conteúdo da página (URL) incluído abaixo${pageContext.truncated ? ' (truncado)' : ''}` : pageContext?.fetchError ? `- Aviso: não foi possível buscar a URL (${pageContext.fetchError})` : ''}
 ${extra ? `\n- Notas adicionais do usuário:\n${extra}` : ''}
 
-## Código fonte (referência de negócio — não citar tecnicamente nos casos)
+${pageContext?.fetched && pageContext.content ? `## Conteúdo observado na página (referência de negócio)\n${pageContext.content}\n\n` : ''}## Código fonte (referência de negócio — não citar tecnicamente nos casos)
 ${codeBlock}
 
 ---

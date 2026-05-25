@@ -81,6 +81,7 @@ interface Env {
   GEMINI_API_KEY?: string;
   GEMINI_MODEL?: string;
   GEMINI_MAX_INPUT_CHARS?: string;
+  GEMINI_MAX_OUTPUT_TOKENS?: string;
   GEMINI_TIMEOUT_SECONDS?: string;
 }
 

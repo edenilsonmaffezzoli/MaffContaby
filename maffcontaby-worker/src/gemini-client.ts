@@ -2,6 +2,7 @@ export type GeminiConfig = {
   apiKey: string;
   model: string;
   timeoutMs: number;
+  maxOutputTokens?: number;
 };
 
 export type GeminiImagePart = {
@@ -9,12 +10,21 @@ export type GeminiImagePart = {
   base64: string;
 };
 
+export type GeminiJsonResult = {
+  text: string;
+  finishReason?: string;
+  outputTruncated: boolean;
+};
+
 type GeminiGenerateResponse = {
   candidates?: Array<{
     content?: { parts?: Array<{ text?: string }> };
+    finishReason?: string;
   }>;
   error?: { message?: string };
 };
+
+const TRUNCATED_FINISH_REASONS = new Set(['MAX_TOKENS', 'RECITATION']);
 
 /**
  * Chama a API Gemini com saída JSON e suporte a imagens inline (base64).
@@ -23,7 +33,7 @@ export async function callGeminiJson(
   config: GeminiConfig,
   prompt: string,
   images: GeminiImagePart[],
-): Promise<string> {
+): Promise<GeminiJsonResult> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent?key=${encodeURIComponent(config.apiKey)}`;
 
   const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [{ text: prompt }];
@@ -31,12 +41,17 @@ export async function callGeminiJson(
     parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
   }
 
+  const generationConfig: Record<string, unknown> = {
+    responseMimeType: 'application/json',
+    temperature: 0.35,
+  };
+  if (config.maxOutputTokens && config.maxOutputTokens > 0) {
+    generationConfig.maxOutputTokens = config.maxOutputTokens;
+  }
+
   const body = {
     contents: [{ role: 'user', parts }],
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 0.35,
-    },
+    generationConfig,
   };
 
   const res = await fetch(url, {
@@ -62,7 +77,12 @@ export async function callGeminiJson(
     throw new Error(data.error.message);
   }
 
-  const text = data.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('').trim();
+  const candidate = data.candidates?.[0];
+  const text = candidate?.content?.parts?.map(p => p.text ?? '').join('').trim();
   if (!text) throw new Error('Resposta vazia do Gemini');
-  return text;
+
+  const finishReason = candidate?.finishReason;
+  const outputTruncated = Boolean(finishReason && TRUNCATED_FINISH_REASONS.has(finishReason));
+
+  return { text, finishReason, outputTruncated };
 }
