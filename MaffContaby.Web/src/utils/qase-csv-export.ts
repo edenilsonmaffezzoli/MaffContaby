@@ -40,6 +40,10 @@ export type QaseCsvExportStats = {
   suiteRows: number;
   subsuiteRows: number;
   outputFilename: string;
+  /** Casos na resposta da API antes do CSV (validação conversão). */
+  apiCasesCount?: number;
+  /** true quando apiCasesCount === casesProcessed. */
+  csvMatchesApi?: boolean;
 };
 
 export type QaseCsvBuildResult = {
@@ -389,7 +393,15 @@ function assertV2CsvStructure(csv: string): void {
 
 export function formatQaseCsvExportSummary(stats: QaseCsvExportStats): string {
   const lines = [
-    `Casos processados: ${stats.casesProcessed}`,
+    `Casos no CSV: ${stats.casesProcessed}`,
+    ...(stats.apiCasesCount != null
+      ? [
+          `Casos na API: ${stats.apiCasesCount}`,
+          stats.csvMatchesApi === false
+            ? 'Atenção: contagem API ≠ CSV — verifique casos sem passos válidos.'
+            : 'Conversão OK: mesma quantidade de casos da API e do CSV.',
+        ]
+      : []),
     `Suites no CSV: ${stats.suiteRows}`,
     `Subsuites no CSV: ${stats.subsuiteRows}`,
     `Prioridades "critical" → "high": ${stats.criticalToHigh}`,
@@ -665,8 +677,13 @@ export function downloadQaseCsv(
   filename = QASE_CSV_FILENAME,
 ): QaseCsvExportStats {
   const { csv, stats } = buildQaseImportCsv(cases, filename);
+  const enriched: QaseCsvExportStats = {
+    ...stats,
+    apiCasesCount: cases.length,
+    csvMatchesApi: stats.casesProcessed === cases.length,
+  };
   triggerDownload(csv, filename);
-  return stats;
+  return enriched;
 }
 
 export function downloadFixedQaseCsv(

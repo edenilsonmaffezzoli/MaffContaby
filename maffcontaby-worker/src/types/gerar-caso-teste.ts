@@ -49,6 +49,21 @@ export type GerarCasoTesteResponse = {
     filesIncluded: number;
     suitesUsed: string[];
     groupingWarning?: string;
+    /** Casos no array bruto retornado pela IA (antes de descartar inválidos). */
+    casesFromGemini: number;
+    /** Casos válidos após normalizeCases. */
+    casesAfterNormalize: number;
+    /** Casos descartados por título/passos inválidos. */
+    casesDropped: number;
+    /** Tamanho em caracteres do JSON bruto do Gemini. */
+    rawJsonLength: number;
+    /** finishReason MAX_TOKENS ou similar — saída possivelmente cortada. */
+    outputTruncated: boolean;
+    finishReason?: string;
+    /** Página do systemPath (URL) foi buscada e injetada no prompt. */
+    urlContentFetched: boolean;
+    urlContentTruncated?: boolean;
+    urlFetchError?: string;
   };
 };
 

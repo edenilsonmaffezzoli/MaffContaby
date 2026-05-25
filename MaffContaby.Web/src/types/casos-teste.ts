@@ -46,6 +46,15 @@ export type GerarCasoTesteResponse = {
     filesIncluded: number;
     suitesUsed: string[];
     groupingWarning?: string;
+    casesFromGemini?: number;
+    casesAfterNormalize?: number;
+    casesDropped?: number;
+    rawJsonLength?: number;
+    outputTruncated?: boolean;
+    finishReason?: string;
+    urlContentFetched?: boolean;
+    urlContentTruncated?: boolean;
+    urlFetchError?: string;
   };
 };
 

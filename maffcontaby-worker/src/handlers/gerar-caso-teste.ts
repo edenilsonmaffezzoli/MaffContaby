@@ -1,3 +1,4 @@
+import { fetchSystemPathContent } from '../fetch-system-url';
 import { callGeminiJson, type GeminiImagePart } from '../gemini-client';
 import { groupCasesBySubject } from '../group-cases-by-subject';
 import { buildGerarCasoTestePrompt } from '../prompts/gerar-caso-teste';
@@ -15,6 +16,7 @@ export type GerarCasoTesteEnv = {
   GEMINI_API_KEY?: string;
   GEMINI_MODEL?: string;
   GEMINI_MAX_INPUT_CHARS?: string;
+  GEMINI_MAX_OUTPUT_TOKENS?: string;
   GEMINI_TIMEOUT_SECONDS?: string;
 };
 
@@ -22,8 +24,10 @@ export type GerarCasoTesteEnv = {
 const MAX_IMAGES = 8;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const DEFAULT_MAX_INPUT_CHARS = 150_000;
+const DEFAULT_MAX_OUTPUT_TOKENS = 32_768;
 const DEFAULT_MODEL = 'gemini-3.5-flash';
 const DEFAULT_TIMEOUT_SECONDS = 180;
+const URL_PAGE_MAX_CHARS = 60_000;
 
 const CODE_EXT_PRIORITY = ['.tsx', '.ts', '.cs', '.jsx', '.js', '.vue', '.py', '.java', '.go'];
 
@@ -166,9 +170,16 @@ function buildExtraTags(o: Record<string, unknown>, suite: string, subsuite: str
   return tags.length ? tags : undefined;
 }
 
-function normalizeCases(raw: unknown): QaseCase[] {
-  if (!Array.isArray(raw)) return [];
+export type NormalizeCasesResult = {
+  cases: QaseCase[];
+  rawCount: number;
+  dropped: number;
+};
+
+export function normalizeCases(raw: unknown): NormalizeCasesResult {
+  if (!Array.isArray(raw)) return { cases: [], rawCount: 0, dropped: 0 };
   const cases: QaseCase[] = [];
+  const rawCount = raw.length;
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue;
     const o = item as Record<string, unknown>;
@@ -216,7 +227,7 @@ function normalizeCases(raw: unknown): QaseCase[] {
       steps,
     });
   }
-  return cases;
+  return { cases, rawCount, dropped: rawCount - cases.length };
 }
 
 function formatAnalysisMarkdown(analysis: Record<string, unknown>): string {
@@ -256,7 +267,13 @@ function extractModulos(analysis: Record<string, unknown> | undefined): string[]
   return analysis.modulos.filter((m): m is string => typeof m === 'string' && Boolean(m.trim()));
 }
 
-function parseGeminiResult(raw: string): GeminiAiResult {
+export type ParseGeminiResult = GeminiAiResult & {
+  casesFromGemini: number;
+  casesAfterNormalize: number;
+  casesDropped: number;
+};
+
+export function parseGeminiResult(raw: string): ParseGeminiResult {
   const parsed = JSON.parse(stripJsonFence(raw)) as Record<string, unknown>;
   let markdown = typeof parsed.markdown === 'string' ? parsed.markdown.trim() : '';
   const analysis =
@@ -264,7 +281,7 @@ function parseGeminiResult(raw: string): GeminiAiResult {
       ? (parsed.analysis as Record<string, unknown>)
       : undefined;
   const modulos = extractModulos(analysis);
-  const normalized = normalizeCases(parsed.cases);
+  const { cases: normalized, rawCount, dropped } = normalizeCases(parsed.cases);
   const grouped = groupCasesBySubject(normalized, modulos);
 
   if (!markdown && grouped.cases.length === 0) {
@@ -279,6 +296,9 @@ function parseGeminiResult(raw: string): GeminiAiResult {
     cases: grouped.cases,
     suitesUsed: grouped.suitesUsed,
     groupingWarning: grouped.groupingWarning,
+    casesFromGemini: rawCount,
+    casesAfterNormalize: grouped.cases.length,
+    casesDropped: dropped,
   };
 }
 
@@ -336,6 +356,7 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
 
   const model = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
   const maxChars = parsePositiveInt(env.GEMINI_MAX_INPUT_CHARS, DEFAULT_MAX_INPUT_CHARS);
+  const maxOutputTokens = parsePositiveInt(env.GEMINI_MAX_OUTPUT_TOKENS, DEFAULT_MAX_OUTPUT_TOKENS);
   const timeoutSeconds = parsePositiveInt(env.GEMINI_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS);
 
   let body: GerarCasoTesteRequest | null = null;
@@ -350,20 +371,32 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
 
   const req = validated.body;
   const systemPath = req.systemPath?.trim() ?? '';
-  const { files, truncated } = prepareSourceFiles(req.sourceFiles, maxChars, systemPath);
+  const pageContext = systemPath
+    ? await fetchSystemPathContent(systemPath, URL_PAGE_MAX_CHARS)
+    : { content: '', fetched: false, truncated: false };
+
+  const pageChars = pageContext.content.length;
+  const codeBudget = Math.max(0, maxChars - pageChars);
+  const { files, truncated } = prepareSourceFiles(req.sourceFiles, codeBudget, systemPath);
 
   const geminiImages: GeminiImagePart[] = (req.images ?? []).map(img => ({
     mimeType: normalizeMime(img.mimeType),
     base64: img.base64.replace(/\s/g, ''),
   }));
 
-  const prompt = buildGerarCasoTestePrompt(req, files, truncated, geminiImages.length);
+  const prompt = buildGerarCasoTestePrompt(
+    req,
+    files,
+    truncated,
+    geminiImages.length,
+    pageContext,
+  );
   const reqImages = req.images ?? [];
 
-  let rawJson: string;
+  let geminiOut: Awaited<ReturnType<typeof callGeminiJson>>;
   try {
-    rawJson = await callGeminiJson(
-      { apiKey, model, timeoutMs: timeoutSeconds * 1000 },
+    geminiOut = await callGeminiJson(
+      { apiKey, model, timeoutMs: timeoutSeconds * 1000, maxOutputTokens },
       prompt,
       geminiImages,
     );
@@ -375,7 +408,9 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
     return gerarCasoTesteError(msg, 502, prompt, reqImages);
   }
 
-  let result: GeminiAiResult;
+  const rawJson = geminiOut.text;
+
+  let result: ParseGeminiResult;
   try {
     result = parseGeminiResult(rawJson);
   } catch (err) {
@@ -394,10 +429,19 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
     prompt: formatPromptForDownload(prompt, reqImages),
     meta: {
       model,
-      truncated,
+      truncated: truncated || pageContext.truncated,
       filesIncluded: files.length,
       suitesUsed: result.suitesUsed,
       groupingWarning: result.groupingWarning,
+      casesFromGemini: result.casesFromGemini,
+      casesAfterNormalize: result.casesAfterNormalize,
+      casesDropped: result.casesDropped,
+      rawJsonLength: rawJson.length,
+      outputTruncated: geminiOut.outputTruncated,
+      finishReason: geminiOut.finishReason,
+      urlContentFetched: pageContext.fetched,
+      urlContentTruncated: pageContext.truncated || undefined,
+      urlFetchError: pageContext.fetchError,
     },
   };
 

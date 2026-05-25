@@ -1,0 +1,563 @@
+{
+  "markdown": "# Casos de teste — Fabiano Fernandes Eventos\n\n## Resumo executivo\n\nSite institucional de página única para divulgação de buffet e churrasco em Blumenau/SC. O visitante conhece serviços por tipo de evento, a história da empresa e entra em contato por WhatsApp, Instagram ou Facebook. Não há login, formulário no site nem área restrita.\n\n### Módulos identificados\n- Navegação e menu\n- Página inicial (destaque)\n- Serviços por tipo de evento\n- Sobre a empresa\n- Contato e canais digitais\n- Rodapé\n- Redes sociais no cabeçalho\n\n### Total de casos: 34\n\n### Funcionalidades cobertas\n- Menu principal e menu em celular\n- Rolagem entre seções\n- Apresentação inicial e chamada para contato\n- Seis tipos de serviço com descrição e benefícios\n- Seção institucional com diferenciais e imagem\n- Botões de WhatsApp, Instagram e Facebook\n- Informações de local e horário de atendimento\n- Diferenciais comerciais e rodapé\n\n### Lacunas de cobertura (funcionalidades ausentes no site)\n- Formulário de contato ou pedido de orçamento na própria página\n- Galeria de fotos de eventos realizados\n- Depoimentos de clientes\n- Cardápio com preços ou simulador de orçamento\n- E-mail clicável para contato\n- Mapa interativo de localização\n- Blog, FAQ ou busca de conteúdo\n\n### Riscos\n- Conversão depende de apps externos (WhatsApp/redes); visitante sem esses apps pode não conseguir contato fácil\n- Ausência de formulário pode reduzir registro de interesse\n- Links externos precisam permanecer válidos para não frustrar o cliente\n- Texto exibido do Instagram pode não coincidir com a expectativa do usuário ao abrir o perfil\n\n---\n\n## Navegação › Menu principal\n\n### Acessar a seção Início pelo menu superior\n1. Clicar em **Início** no menu → Página rola até o topo com título e mensagem principal visíveis.\n\n### Acessar a seção Serviços pelo menu superior\n1. Clicar em **Serviços** → Seção **Nossos Serviços** é exibida com os cartões de tipos de evento.\n\n### Acessar a seção Sobre pelo menu superior\n1. Clicar em **Sobre** → Seção sobre a empresa com texto e destaques fica visível.\n\n### Acessar a seção Contato pelo menu superior\n1. Clicar em **Contato** → Seção **Entre em Contato** com canais e informações fica visível.\n\n### Destacar no menu a seção em que o usuário está\n1. Rolar a página até a seção de Serviços → Item **Serviços** no menu aparece como seção atual.\n\n## Navegação › Menu em dispositivo móvel\n\n### Abrir o menu em tela de celular\n1. Reduzir a largura da tela (celular) e tocar no ícone de menu → Opções Início, Serviços, Sobre e Contato ficam disponíveis.\n\n### Fechar o menu após escolher uma seção\n1. Abrir o menu mobile, tocar em **Contato** → Menu fecha e a seção de contato é exibida.\n\n## Navegação › Rodapé\n\n### Acessar tipos de serviço pelos links do rodapé\n1. Rolar até o rodapé e clicar em **Casamentos** (ou outro serviço listado) → Página posiciona na área de serviços.\n\n### Visualizar telefone no rodapé\n1. Rolar até o rodapé na área **Contato** → Número **(47) 99172-7277** é exibido de forma legível.\n\n---\n\n## Página inicial › Apresentação\n\n### Exibir proposta principal na abertura do site\n1. Abrir o endereço do site → Título **Fabiano Fernandes Eventos**, frase sobre buffet e churrasco e botão **Entre em Contato** aparecem na primeira tela.\n\n### Ir para contato pelo botão principal\n1. Na tela inicial, clicar em **Entre em Contato** → Usuário é levado à seção de contato com botões de WhatsApp, Instagram e Facebook.\n\n## Página inicial › Rolagem\n\n### Descer para serviços pelo indicador na tela inicial\n1. Na tela inicial, clicar em **Role para baixo** → Seção **Nossos Serviços** é exibida.\n\n---\n\n## Serviços › Visão geral\n\n### Exibir título e texto introdutório dos serviços\n1. Acessar a seção Serviços → Títulos **Nossos Serviços** e texto sobre buffet e churrasco para todos os tipos de evento são exibidos.\n\n### Listar os seis tipos de evento atendidos\n1. Na seção de serviços, rolar pelos cartões → São exibidos: Casamentos, Formaturas, Primeira Comunhão, Aniversários, Festas Corporativas e Churrascos em Geral.\n\n## Serviços › Casamentos\n\n### Apresentar benefícios do serviço de casamento\n1. Localizar o cartão **Casamentos** → Descrição sobre buffet e churrasco e itens como pratos quentes/frios, carnes nobres e garçons especializados são exibidos.\n\n## Serviços › Formaturas\n\n### Apresentar opções do serviço de formatura\n1. Localizar o cartão **Formaturas** → Itens como buffet variado, churrasco tradicional, opções vegetarianas e bar completo são exibidos.\n\n## Serviços › Primeira Comunhão\n\n### Apresentar cardápio familiar para primeira comunhão\n1. Localizar o cartão **Primeira Comunhão** → Texto sobre ambiente familiar e itens como cardápio acolhedor, opções para crianças e churrasco suave são exibidos.\n\n## Serviços › Aniversários\n\n### Apresentar flexibilidade para festas de aniversário\n1. Localizar o cartão **Aniversários** → Itens como cardápios por idade, churrasco para família, finger foods e flexibilidade de local são exibidos.\n\n## Serviços › Festas corporativas\n\n### Apresentar proposta para eventos empresariais\n1. Localizar o cartão **Festas Corporativas** → Itens como cardápio executivo, churrasco premium, serviço discreto e experiência empresarial são exibidos.\n\n## Serviços › Churrascos em geral\n\n### Apresentar estrutura para churrascos avulsos\n1. Localizar o cartão **Churrascos em Geral** → Itens como carnes selecionadas, acompanhamentos tradicionais, churrasqueiro experiente e equipamentos próprios são exibidos.\n\n---\n\n## Sobre › História e diferenciais\n\n### Exibir texto institucional da empresa\n1. Acessar a seção Sobre → Textos sobre experiência em eventos, buffet, churrasco e atendimento personalizado são exibidos.\n\n### Exibir três diferenciais em destaque\n1. Na seção Sobre, ler os destaques → Aparecem: chef especializado em churrasco, mais de 25 anos de experiência e atendimento personalizado.\n\n## Sobre › Imagem\n\n### Exibir foto do chef na seção Sobre\n1. Acessar a seção Sobre → Imagem do chef Fabiano Fernandes é exibida ao lado do texto.\n\n---\n\n## Contato › Canais de atendimento\n\n### Iniciar conversa no WhatsApp com mensagem de orçamento\n1. Na seção Contato, clicar no botão **WhatsApp** → Abre conversa no WhatsApp com mensagem inicial pedindo orçamento para evento.\n\n### Abrir perfil no Instagram pela seção de contato\n1. Na seção Contato, clicar no botão **Instagram** → Perfil da empresa no Instagram é aberto em nova aba ou aplicativo.\n\n### Abrir página no Facebook pela seção de contato\n1. Na seção Contato, clicar no botão **Facebook** → Página da empresa no Facebook é aberta em nova aba ou aplicativo.\n\n### Acessar WhatsApp pelo ícone no topo da página\n1. No topo da página, clicar no ícone do WhatsApp → Conversa no WhatsApp com a empresa é iniciada.\n\n## Contato › Informações adicionais\n\n### Exibir cidade de atendimento\n1. Na seção Contato, bloco **Informações Adicionais** → Texto **Blumenau, Santa Catarina** é exibido.\n\n### Exibir disponibilidade de atendimento\n1. No mesmo bloco → Texto **Atendimento: Segunda a Segunda** é exibido.\n\n## Contato › Por que nos escolher\n\n### Exibir lista de vantagens comerciais\n1. Localizar o bloco **Por que nos escolher?** → Lista com experiência, ingredientes, atendimento, preços competitivos e pontualidade é exibida.\n\n---\n\n## Rodapé › Informações e direitos\n\n### Exibir resumo da marca no rodapé\n1. Rolar até o final da página → Texto sobre especialistas em buffet e churrasco e transformar celebrações em momentos inesquecíveis é exibido.\n\n### Exibir aviso de direitos autorais\n1. No final do rodapé → Texto de copyright **2025 Fabiano Fernandes Eventos** e direitos reservados é exibido.\n\n---\n\n## Redes sociais › Cabeçalho\n\n### Acessar Instagram pelo topo da página\n1. No cabeçalho, clicar no ícone do Instagram → Perfil da empresa é aberto para o visitante.\n\n### Acessar Facebook pelo topo da página\n1. No cabeçalho, clicar no ícone do Facebook → Página da empresa é aberta para o visitante.\n",
+  "analysis": {
+    "modulos": [
+      "Navegação e menu",
+      "Página inicial",
+      "Serviços",
+      "Sobre",
+      "Contato",
+      "Rodapé",
+      "Redes sociais no cabeçalho"
+    ],
+    "totalCasos": 34,
+    "funcionalidades": [
+      "Menu principal com âncoras para Início, Serviços, Sobre e Contato",
+      "Menu responsivo para celular",
+      "Destaque visual da seção ativa no menu ao rolar",
+      "Tela inicial com chamada para contato",
+      "Indicador para rolar até serviços",
+      "Seis cartões de serviços por tipo de evento",
+      "Seção institucional com diferenciais e foto",
+      "Contato via WhatsApp com mensagem pré-preenchida de orçamento",
+      "Contato via Instagram e Facebook",
+      "Informações de localização e horário de atendimento",
+      "Lista de vantagens comerciais",
+      "Rodapé com links de serviços, telefone e redes sociais",
+      "Ícones de redes sociais fixos no cabeçalho"
+    ],
+    "semCobertura": [
+      "Formulário de contato ou pedido de orçamento dentro do site",
+      "Galeria de fotos de eventos realizados",
+      "Depoimentos ou avaliações de clientes",
+      "Cardápio detalhado ou tabela de preços",
+      "E-mail clicável para contato direto",
+      "Mapa interativo de localização",
+      "Blog, FAQ ou busca de conteúdo",
+      "Área logada ou agendamento online"
+    ],
+    "riscos": [
+      "Conversão depende de aplicativos externos; visitantes sem WhatsApp ou redes podem ter dificuldade para contatar",
+      "Ausência de formulário no site pode reduzir captação de leads que preferem preencher dados na página",
+      "Links para redes sociais precisam permanecer ativos; link quebrado impede contato imediato",
+      "Nome exibido do Instagram pode gerar dúvida se não corresponder ao perfil aberto",
+      "Sem portfólio visual no site, o cliente decide o contato apenas pelo texto institucional"
+    ]
+  },
+  "cases": [
+    {
+      "suite": "Navegação",
+      "subsuite": "Menu principal",
+      "title": "Acessar a seção Início pelo menu superior",
+      "description": "Validar que o visitante consegue voltar ao topo e à apresentação principal usando o menu fixo do site.",
+      "preconditions": "Site aberto em navegador de internet em computador ou tablet com menu completo visível.",
+      "priority": "high",
+      "tags": ["happy-path", "regressao"],
+      "steps": [
+        {
+          "action": "Rolar a página até a seção de Contato para sair do topo",
+          "expected_result": "A seção de contato fica visível na tela"
+        },
+        {
+          "action": "Clicar em Início no menu superior",
+          "expected_result": "A página rola até o topo e o título principal Fabiano Fernandes Eventos fica visível"
+        }
+      ]
+    },
+    {
+      "suite": "Navegação",
+      "subsuite": "Menu principal",
+      "title": "Acessar a seção Serviços pelo menu superior",
+      "description": "Garantir que o menu leva o usuário diretamente à listagem de tipos de evento oferecidos.",
+      "preconditions": "Site carregado com sucesso na página inicial.",
+      "priority": "high",
+      "tags": ["happy-path"],
+      "steps": [
+        {
+          "action": "Clicar em Serviços no menu superior",
+          "expected_result": "A seção Nossos Serviços é exibida com os cartões de tipos de evento"
+        }
+      ]
+    },
+    {
+      "suite": "Navegação",
+      "subsuite": "Menu principal",
+      "title": "Acessar a seção Sobre pelo menu superior",
+      "description": "Confirmar que o visitante encontra a história e os diferenciais da empresa pelo menu.",
+      "preconditions": "Site aberto na página inicial.",
+      "priority": "medium",
+      "tags": ["happy-path"],
+      "steps": [
+        {
+          "action": "Clicar em Sobre no menu superior",
+          "expected_result": "A seção Sobre Fabiano Fernandes Eventos com texto institucional fica visível"
+        }
+      ]
+    },
+    {
+      "suite": "Navegação",
+      "subsuite": "Menu principal",
+      "title": "Acessar a seção Contato pelo menu superior",
+      "description": "Validar o caminho principal para o visitante que deseja solicitar orçamento ou tirar dúvidas.",
+      "preconditions": "Site aberto na página inicial.",
+      "priority": "high",
+      "tags": ["happy-path", "regressao"],
+      "steps": [
+        {
+          "action": "Clicar em Contato no menu superior",
+          "expected_result": "A seção Entre em Contato é exibida com botões de WhatsApp, Instagram e Facebook"
+        }
+      ]
+    },
+    {
+      "suite": "Navegação",
+      "subsuite": "Menu principal",
+      "title": "Destacar no menu a seção em que o usuário está",
+      "description": "Verificar se o visitante identifica em qual parte do site está ao rolar a página.",
+      "preconditions": "Site aberto com menu superior visível.",
+      "priority": "low",
+      "tags": ["usabilidade"],
+      "steps": [
+        {
+          "action": "Rolar lentamente a página até a área de Serviços ficar centralizada na tela",
+          "expected_result": "O item Serviços no menu aparece destacado em relação aos demais itens"
+        }
+      ]
+    },
+    {
+      "suite": "Navegação",
+      "subsuite": "Menu em dispositivo móvel",
+      "title": "Abrir o menu em tela de celular",
+      "description": "Garantir que usuários em celular consigam acessar todas as seções quando o menu principal está recolhido.",
+      "preconditions": "Site aberto em celular ou navegador com largura de tela de smartphone.",
+      "priority": "high",
+      "tags": ["mobile", "happy-path"],
+      "steps": [
+        {
+          "action": "Tocar no ícone de menu (três linhas) no topo da página",
+          "expected_result": "As opções Início, Serviços, Sobre e Contato ficam visíveis para seleção"
+        }
+      ]
+    },
+    {
+      "suite": "Navegação",
+      "subsuite": "Menu em dispositivo móvel",
+      "title": "Fechar o menu após escolher uma seção",
+      "description": "Validar que o menu mobile não permanece aberto cobrindo o conteúdo após a navegação.",
+      "preconditions": "Site aberto em tela de celular com menu mobile disponível.",
+      "priority": "medium",
+      "tags": ["mobile", "usabilidade"],
+      "steps": [
+        {
+          "action": "Abrir o menu mobile e tocar em Contato",
+          "expected_result": "O menu fecha e a seção de contato é exibida em tela cheia"
+        }
+      ]
+    },
+    {
+      "suite": "Navegação",
+      "subsuite": "Rodapé",
+      "title": "Acessar tipos de serviço pelos links do rodapé",
+      "description": "Confirmar que os atalhos do rodapé ajudam o visitante a revisar os serviços sem usar o menu superior.",
+      "preconditions": "Página totalmente carregada; usuário na parte inferior do site.",
+      "priority": "medium",
+      "tags": ["rodape"],
+      "steps": [
+        {
+          "action": "No rodapé, clicar no link Casamentos em Nossos Serviços",
+          "expected_result": "A página posiciona na seção de serviços e o cartão de Casamentos fica acessível na tela"
+        }
+      ]
+    },
+    {
+      "suite": "Navegação",
+      "subsuite": "Rodapé",
+      "title": "Visualizar telefone no rodapé",
+      "description": "Garantir que o visitante encontra o telefone da empresa mesmo após rolar até o final da página.",
+      "preconditions": "Site aberto; usuário rola até o rodapé.",
+      "priority": "high",
+      "tags": ["contato", "regressao"],
+      "steps": [
+        {
+          "action": "Localizar a área Contato no rodapé",
+          "expected_result": "O número (47) 99172-7277 é exibido de forma legível"
+        }
+      ]
+    },
+    {
+      "suite": "Página inicial",
+      "subsuite": "Apresentação",
+      "title": "Exibir proposta principal na abertura do site",
+      "description": "Validar a primeira impressão do visitante sobre o negócio de buffet e churrasco para eventos.",
+      "preconditions": "Primeiro acesso ao endereço do site em sessão nova.",
+      "priority": "high",
+      "tags": ["happy-path", "regressao"],
+      "steps": [
+        {
+          "action": "Abrir o site e aguardar o carregamento completo",
+          "expected_result": "São exibidos o nome Fabiano Fernandes Eventos, a frase sobre buffet e churrasco e o botão Entre em Contato na primeira tela"
+        }
+      ]
+    },
+    {
+      "suite": "Página inicial",
+      "subsuite": "Apresentação",
+      "title": "Ir para contato pelo botão principal da tela inicial",
+      "description": "Confirmar o principal convite à ação para visitantes interessados em orçamento.",
+      "preconditions": "Usuário na tela inicial do site.",
+      "priority": "high",
+      "tags": ["happy-path", "conversao"],
+      "steps": [
+        {
+          "action": "Clicar no botão Entre em Contato na área principal",
+          "expected_result": "A seção de contato é exibida com os canais WhatsApp, Instagram e Facebook"
+        }
+      ]
+    },
+    {
+      "suite": "Página inicial",
+      "subsuite": "Rolagem",
+      "title": "Descer para serviços pelo indicador na tela inicial",
+      "description": "Validar alternativa de navegação para quem deseja conhecer os serviços a partir do topo.",
+      "preconditions": "Usuário na tela inicial com o texto Role para baixo visível.",
+      "priority": "low",
+      "tags": ["usabilidade"],
+      "steps": [
+        {
+          "action": "Clicar em Role para baixo na tela inicial",
+          "expected_result": "A seção Nossos Serviços é exibida na tela"
+        }
+      ]
+    },
+    {
+      "suite": "Serviços",
+      "subsuite": "Visão geral",
+      "title": "Exibir título e texto introdutório dos serviços",
+      "description": "Garantir contexto claro antes da leitura dos tipos de evento atendidos.",
+      "preconditions": "Usuário navega até a seção Serviços.",
+      "priority": "medium",
+      "tags": ["happy-path"],
+      "steps": [
+        {
+          "action": "Acessar a seção Serviços pelo menu ou rolagem",
+          "expected_result": "Os títulos Nossos Serviços e o texto sobre buffet e churrasco para todos os tipos de evento são exibidos"
+        }
+      ]
+    },
+    {
+      "suite": "Serviços",
+      "subsuite": "Visão geral",
+      "title": "Listar os seis tipos de evento atendidos",
+      "description": "Confirmar que o portfólio completo de serviços está visível para comparação pelo cliente.",
+      "preconditions": "Seção de serviços visível na tela.",
+      "priority": "high",
+      "tags": ["regressao"],
+      "steps": [
+        {
+          "action": "Rolar pelos cartões na área de serviços",
+          "expected_result": "São exibidos os seis tipos: Casamentos, Formaturas, Primeira Comunhão, Aniversários, Festas Corporativas e Churrascos em Geral"
+        }
+      ]
+    },
+    {
+      "suite": "Serviços",
+      "subsuite": "Casamentos",
+      "title": "Apresentar benefícios do serviço de casamento",
+      "description": "Validar informações para noivos que buscam buffet e churrasco no casamento.",
+      "preconditions": "Seção de serviços acessível.",
+      "priority": "medium",
+      "tags": ["casamento"],
+      "steps": [
+        {
+          "action": "Localizar o cartão Casamentos e ler o conteúdo",
+          "expected_result": "São exibidos buffet com pratos quentes e frios, churrasco com carnes nobres e serviço de garçons especializados"
+        }
+      ]
+    },
+    {
+      "suite": "Serviços",
+      "subsuite": "Formaturas",
+      "title": "Apresentar opções do serviço de formatura",
+      "description": "Garantir que formandos vejam variedade de cardápio e opções para diferentes perfis de convidados.",
+      "preconditions": "Seção de serviços acessível.",
+      "priority": "medium",
+      "tags": ["formatura"],
+      "steps": [
+        {
+          "action": "Localizar o cartão Formaturas e ler o conteúdo",
+          "expected_result": "São exibidos buffet variado, churrasco tradicional, opções vegetarianas e serviço de bar completo"
+        }
+      ]
+    },
+    {
+      "suite": "Serviços",
+      "subsuite": "Primeira Comunhão",
+      "title": "Apresentar cardápio familiar para primeira comunhão",
+      "description": "Validar comunicação adequada para eventos religiosos e familiares com crianças.",
+      "preconditions": "Seção de serviços acessível.",
+      "priority": "medium",
+      "tags": ["comunhao"],
+      "steps": [
+        {
+          "action": "Localizar o cartão Primeira Comunhão e ler o conteúdo",
+          "expected_result": "São exibidos cardápio familiar e acolhedor, opções para crianças e churrasco suave e saboroso"
+        }
+      ]
+    },
+    {
+      "suite": "Serviços",
+      "subsuite": "Aniversários",
+      "title": "Apresentar flexibilidade para festas de aniversário",
+      "description": "Confirmar opções para festas em diferentes idades e formatos.",
+      "preconditions": "Seção de serviços acessível.",
+      "priority": "medium",
+      "tags": ["aniversario"],
+      "steps": [
+        {
+          "action": "Localizar o cartão Aniversários e ler o conteúdo",
+          "expected_result": "São exibidos cardápios por idade, churrasco para família, finger foods e flexibilidade de local"
+        }
+      ]
+    },
+    {
+      "suite": "Serviços",
+      "subsuite": "Festas corporativas",
+      "title": "Apresentar proposta para eventos empresariais",
+      "description": "Validar mensagem voltada a empresas que precisam de evento profissional e discreto.",
+      "preconditions": "Seção de serviços acessível.",
+      "priority": "medium",
+      "tags": ["corporativo"],
+      "steps": [
+        {
+          "action": "Localizar o cartão Festas Corporativas e ler o conteúdo",
+          "expected_result": "São exibidos cardápio executivo, churrasco premium, serviço discreto e experiência em eventos empresariais"
+        }
+      ]
+    },
+    {
+      "suite": "Serviços",
+      "subsuite": "Churrascos em geral",
+      "title": "Apresentar estrutura para churrascos avulsos",
+      "description": "Garantir clareza para clientes que contratam apenas churrasco em qualquer ocasião.",
+      "preconditions": "Seção de serviços acessível.",
+      "priority": "medium",
+      "tags": ["churrasco"],
+      "steps": [
+        {
+          "action": "Localizar o cartão Churrascos em Geral e ler o conteúdo",
+          "expected_result": "São exibidos carnes selecionadas, acompanhamentos tradicionais, churrasqueiro experiente e equipamentos próprios"
+        }
+      ]
+    },
+    {
+      "suite": "Sobre",
+      "subsuite": "História e diferenciais",
+      "title": "Exibir texto institucional da empresa",
+      "description": "Validar que o visitante entende a experiência e o foco em atendimento personalizado.",
+      "preconditions": "Site carregado; usuário acessa a seção Sobre.",
+      "priority": "medium",
+      "tags": ["institucional"],
+      "steps": [
+        {
+          "action": "Ler os parágrafos na seção Sobre Fabiano Fernandes Eventos",
+          "expected_result": "Textos sobre experiência em eventos, buffet, churrasco e atendimento personalizado são exibidos de forma legível"
+        }
+      ]
+    },
+    {
+      "suite": "Sobre",
+      "subsuite": "História e diferenciais",
+      "title": "Exibir três diferenciais em destaque",
+      "description": "Confirmar reforço dos principais argumentos de confiança antes do contato.",
+      "preconditions": "Seção Sobre visível na tela.",
+      "priority": "medium",
+      "tags": ["institucional"],
+      "steps": [
+        {
+          "action": "Verificar os destaques abaixo do texto institucional",
+          "expected_result": "Aparecem chef especializado em churrasco, mais de 25 anos de experiência e atendimento personalizado"
+        }
+      ]
+    },
+    {
+      "suite": "Sobre",
+      "subsuite": "Imagem",
+      "title": "Exibir foto do chef na seção Sobre",
+      "description": "Garantir elemento visual que humaniza a marca e reforça credibilidade.",
+      "preconditions": "Seção Sobre acessível.",
+      "priority": "low",
+      "tags": ["institucional"],
+      "steps": [
+        {
+          "action": "Observar a área visual ao lado do texto na seção Sobre",
+          "expected_result": "A foto do chef Fabiano Fernandes é exibida corretamente"
+        }
+      ]
+    },
+    {
+      "suite": "Contato",
+      "subsuite": "Canais de atendimento",
+      "title": "Iniciar conversa no WhatsApp com mensagem de orçamento",
+      "description": "Validar o principal fluxo de conversão para solicitação de orçamento de evento.",
+      "preconditions": "Dispositivo com WhatsApp instalado ou WhatsApp Web disponível; seção de contato acessível.",
+      "priority": "high",
+      "tags": ["happy-path", "conversao", "regressao"],
+      "steps": [
+        {
+          "action": "Na seção Entre em Contato, clicar no botão WhatsApp",
+          "expected_result": "Abre o WhatsApp com conversa para o número da empresa e mensagem inicial solicitando orçamento para evento"
+        }
+      ]
+    },
+    {
+      "suite": "Contato",
+      "subsuite": "Canais de atendimento",
+      "title": "Abrir perfil no Instagram pela seção de contato",
+      "description": "Garantir canal alternativo para clientes que preferem rede social visual.",
+      "preconditions": "Navegador permite abrir links externos; seção de contato acessível.",
+      "priority": "medium",
+      "tags": ["redes-sociais"],
+      "steps": [
+        {
+          "action": "Clicar no botão Instagram na seção de contato",
+          "expected_result": "O perfil da empresa no Instagram é aberto em nova aba ou no aplicativo"
+        }
+      ]
+    },
+    {
+      "suite": "Contato",
+      "subsuite": "Canais de atendimento",
+      "title": "Abrir página no Facebook pela seção de contato",
+      "description": "Validar segundo canal social para dúvidas e relacionamento com a marca.",
+      "preconditions": "Seção de contato acessível.",
+      "priority": "medium",
+      "tags": ["redes-sociais"],
+      "steps": [
+        {
+          "action": "Clicar no botão Facebook na seção de contato",
+          "expected_result": "A página da empresa no Facebook é aberta para o visitante"
+        }
+      ]
+    },
+    {
+      "suite": "Contato",
+      "subsuite": "Canais de atendimento",
+      "title": "Acessar WhatsApp pelo ícone no topo da página",
+      "description": "Confirmar atalho permanente para contato rápido em qualquer momento da navegação.",
+      "preconditions": "Site aberto em qualquer seção com cabeçalho visível.",
+      "priority": "high",
+      "tags": ["conversao", "regressao"],
+      "steps": [
+        {
+          "action": "No topo da página, clicar no ícone do WhatsApp",
+          "expected_result": "O WhatsApp é aberto com possibilidade de iniciar conversa com a empresa"
+        }
+      ]
+    },
+    {
+      "suite": "Contato",
+      "subsuite": "Informações adicionais",
+      "title": "Exibir cidade de atendimento",
+      "description": "Validar que o visitante identifica a região atendida pela empresa.",
+      "preconditions": "Seção de contato acessível.",
+      "priority": "medium",
+      "tags": ["informacao"],
+      "steps": [
+        {
+          "action": "Localizar o bloco Informações Adicionais na seção de contato",
+          "expected_result": "O texto Blumenau, Santa Catarina é exibido"
+        }
+      ]
+    },
+    {
+      "suite": "Contato",
+      "subsuite": "Informações adicionais",
+      "title": "Exibir disponibilidade de atendimento",
+      "description": "Garantir clareza sobre dias em que a empresa pode ser contatada.",
+      "preconditions": "Seção de contato acessível.",
+      "priority": "medium",
+      "tags": ["informacao"],
+      "steps": [
+        {
+          "action": "Ler as informações no bloco Informações Adicionais",
+          "expected_result": "É exibido Atendimento: Segunda a Segunda"
+        }
+      ]
+    },
+    {
+      "suite": "Contato",
+      "subsuite": "Por que nos escolher",
+      "title": "Exibir lista de vantagens comerciais",
+      "description": "Validar argumentos de venda exibidos antes do visitante sair do site.",
+      "preconditions": "Seção de contato acessível.",
+      "priority": "medium",
+      "tags": ["comercial"],
+      "steps": [
+        {
+          "action": "Localizar o bloco Por que nos escolher?",
+          "expected_result": "São exibidos itens sobre experiência, ingredientes, atendimento, preços competitivos e pontualidade garantida"
+        }
+      ]
+    },
+    {
+      "suite": "Rodapé",
+      "subsuite": "Informações e direitos",
+      "title": "Exibir resumo da marca no rodapé",
+      "description": "Confirmar reforço da proposta de valor ao final da leitura da página.",
+      "preconditions": "Usuário rola até o final do site.",
+      "priority": "low",
+      "tags": ["rodape"],
+      "steps": [
+        {
+          "action": "Ler o texto ao lado da logomarca no rodapé",
+          "expected_result": "É exibido texto sobre especialistas em buffet e churrasco e celebrações inesquecíveis"
+        }
+      ]
+    },
+    {
+      "suite": "Rodapé",
+      "subsuite": "Informações e direitos",
+      "title": "Exibir aviso de direitos autorais",
+      "description": "Validar informação legal visível ao visitante na parte inferior do site.",
+      "preconditions": "Rodapé visível na tela.",
+      "priority": "low",
+      "tags": ["rodape"],
+      "steps": [
+        {
+          "action": "Verificar a linha final do rodapé",
+          "expected_result": "É exibido copyright 2025 Fabiano Fernandes Eventos com menção a todos os direitos reservados"
+        }
+      ]
+    },
+    {
+      "suite": "Redes sociais",
+      "subsuite": "Cabeçalho",
+      "title": "Acessar Instagram pelo topo da página",
+      "description": "Garantir atalho de rede social disponível durante toda a navegação.",
+      "preconditions": "Cabeçalho do site visível.",
+      "priority": "medium",
+      "tags": ["redes-sociais"],
+      "steps": [
+        {
+          "action": "Clicar no ícone do Instagram no cabeçalho",
+          "expected_result": "O perfil da empresa no Instagram é aberto para o visitante"
+        }
+      ]
+    },
+    {
+      "suite": "Redes sociais",
+      "subsuite": "Cabeçalho",
+      "title": "Acessar Facebook pelo topo da página",
+      "description": "Validar segundo atalho social fixo no topo para ampliar canais de contato.",
+      "preconditions": "Cabeçalho do site visível.",
+      "priority": "medium",
+      "tags": ["redes-sociais"],
+      "steps": [
+        {
+          "action": "Clicar no ícone do Facebook no cabeçalho",
+          "expected_result": "A página da empresa no Facebook é aberta para o visitante"
+        }
+      ]
+    }
+  ]
+}

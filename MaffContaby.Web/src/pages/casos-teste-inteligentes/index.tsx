@@ -1,7 +1,7 @@
 import { getApiBaseUrl } from '@/config/api-base-url';
 import { useHttpClient } from '@/hooks/use-http-client';
 import { gerarCasoTeste } from '@/services/casos-teste-service';
-import type { ImageInput, QaseCase, SourceFileInput } from '@/types/casos-teste';
+import type { GerarCasoTesteResponse, ImageInput, QaseCase, SourceFileInput } from '@/types/casos-teste';
 import { openCasosTestePdf } from '@/utils/casos-teste-pdf';
 import { downloadPromptTxt, extractPromptFromGerarError } from '@/utils/download-prompt-txt';
 import {
@@ -20,6 +20,29 @@ import { useMutation } from '@tanstack/react-query';
 import { marked } from 'marked';
 import { useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+
+function formatGerarMeta(meta: GerarCasoTesteResponse['meta']): string {
+  const parts = [
+    `Modelo: ${meta.model}`,
+    `Arquivos: ${meta.filesIncluded}`,
+    meta.truncated ? 'Entrada truncada' : null,
+    meta.urlContentFetched ? 'Página URL incluída no prompt' : null,
+    meta.urlContentTruncated ? 'Conteúdo URL truncado' : null,
+    meta.urlFetchError ? `URL: ${meta.urlFetchError}` : null,
+    meta.casesAfterNormalize != null ? `Casos válidos: ${meta.casesAfterNormalize}` : null,
+    meta.casesFromGemini != null && meta.casesDropped != null && meta.casesDropped > 0
+      ? `Descartados na normalização: ${meta.casesDropped} (de ${meta.casesFromGemini} da IA)`
+      : meta.casesFromGemini != null
+        ? `Casos da IA: ${meta.casesFromGemini}`
+        : null,
+    meta.rawJsonLength != null ? `JSON IA: ${meta.rawJsonLength.toLocaleString('pt-BR')} caracteres` : null,
+    meta.outputTruncated ? 'Saída da IA possivelmente cortada (aumente GEMINI_MAX_OUTPUT_TOKENS)' : null,
+    meta.finishReason && meta.finishReason !== 'STOP' ? `finishReason: ${meta.finishReason}` : null,
+    meta.suitesUsed?.length ? `Suites: ${meta.suitesUsed.join(', ')}` : null,
+    meta.groupingWarning ?? null,
+  ].filter(Boolean);
+  return parts.join(' · ');
+}
 
 function formatHttpError(error: unknown) {
   const e = error as {
@@ -99,14 +122,7 @@ export function CasosTesteInteligentesPage() {
       setMarkdown(data.markdown);
       setCases(data.cases);
       setLastPrompt(data.prompt ?? '');
-      const suites =
-        data.meta.suitesUsed?.length > 0
-          ? ` · Suites: ${data.meta.suitesUsed.join(', ')}`
-          : '';
-      const grouping = data.meta.groupingWarning ? ` · ${data.meta.groupingWarning}` : '';
-      setMetaInfo(
-        `Modelo: ${data.meta.model} · Arquivos: ${data.meta.filesIncluded}${data.meta.truncated ? ' · Código truncado' : ''}${suites}${grouping}`,
-      );
+      setMetaInfo(formatGerarMeta(data.meta));
     },
     onError: error => {
       const prompt = extractPromptFromGerarError(error);
