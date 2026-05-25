@@ -288,6 +288,52 @@ function parseCsvLine(line: string): string[] {
   return fields;
 }
 
+/** Interpreta o CSV inteiro, respeitando campos entre aspas com quebras de linha. */
+function parseCsvRecords(csv: string): string[][] {
+  const records: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  const s = csv.replace(/^\uFEFF/, '');
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (s[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ',') {
+      row.push(field);
+      field = '';
+    } else if (ch === '\r' || ch === '\n') {
+      if (ch === '\r' && s[i + 1] === '\n') i++;
+      row.push(field);
+      field = '';
+      if (row.some(c => c.length > 0)) records.push(row);
+      row = [];
+    } else {
+      field += ch;
+    }
+  }
+
+  row.push(field);
+  if (row.some(c => c.length > 0)) records.push(row);
+
+  return records;
+}
+
 function parseClassicStepsField(text: string): QaseStep[] {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const steps: QaseStep[] = [];
@@ -313,13 +359,24 @@ function mergeStepsActionsAndResults(actionsText: string, resultsText: string): 
 }
 
 function assertV2CsvStructure(csv: string): void {
-  const lines = csv.replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
-  const expectedCols = parseCsvLine(QASE_CSV_HEADER).length;
-  if (parseCsvLine(lines[0]).join(',') !== QASE_CSV_HEADER) {
+  const records = parseCsvRecords(csv);
+  const headerCols = parseCsvLine(QASE_CSV_HEADER);
+  const expectedCols = headerCols.length;
+
+  if (records.length < 2) {
+    throw new Error('CSV sem cabeçalho ou linhas de dados.');
+  }
+
+  const header = records[0];
+  if (
+    header.length !== expectedCols ||
+    headerCols.some((name, i) => header[i] !== name)
+  ) {
     throw new Error('Cabeçalho CSV diverge do padrão Qase.io v2.');
   }
-  for (let i = 1; i < lines.length; i++) {
-    const cols = parseCsvLine(lines[i]);
+
+  for (let i = 1; i < records.length; i++) {
+    const cols = records[i];
     if (cols.length !== expectedCols) {
       throw new Error(`Linha ${i + 1} com ${cols.length} colunas (esperado ${expectedCols}).`);
     }
@@ -453,13 +510,13 @@ function parseCasesFromLegacyCsv(csvInput: string, stats: QaseCsvExportStats): Q
 }
 
 function parseCasesFromV2Csv(csvInput: string, stats: QaseCsvExportStats): QaseCase[] {
-  const lines = csvInput.replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
-  if (lines.length < 2) throw new Error('CSV sem cabeçalho ou linhas de dados.');
+  const records = parseCsvRecords(csvInput);
+  if (records.length < 2) throw new Error('CSV sem cabeçalho ou linhas de dados.');
 
   const cases: QaseCase[] = [];
 
-  for (let li = 1; li < lines.length; li++) {
-    const fields = parseCsvLine(lines[li]);
+  for (let li = 1; li < records.length; li++) {
+    const fields = records[li];
     if (fields[COL.suiteWithoutCases] === '1') continue;
 
     const title = fields[COL.title]?.trim() ?? '';
