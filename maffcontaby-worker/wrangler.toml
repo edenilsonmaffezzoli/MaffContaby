@@ -7,3 +7,6 @@ send_metrics = false
 kv_namespaces = [
   { binding = "MAFF_KV", id = "69be979544c543c7852fcc63a5a43603", preview_id = "69be979544c543c7852fcc63a5a43603" }
 ]
+
+[vars]
+GEMINI_MODEL = "gemini-3.1-pro"
