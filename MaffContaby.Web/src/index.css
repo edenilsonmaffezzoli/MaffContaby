@@ -1,6 +1,56 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+@theme {
+  /* Brand colors */
+  --color-primary:         #006666;
+  --color-primary-hover:   #005555;
+  --color-primary-light:   rgba(0,102,102,0.08);
+  --color-primary-mid:     rgba(0,102,102,0.16);
+
+  --color-danger:          #D32F2F;
+  --color-danger-light:    #FFEBEE;
+  --color-danger-dark:     #B71C1C;
+
+  --color-warning:         #F57C00;
+  --color-warning-light:   #FFF3E0;
+
+  --color-success:         #006666;
+
+  --color-sidebar-bg:      #003366;
+  --color-sidebar-text:    rgba(255,255,255,0.85);
+  --color-sidebar-muted:   rgba(255,255,255,0.50);
+
+  --color-surface:         #FFFFFF;
+  --color-bg:              #F0F0F0;
+  --color-muted:           #4B5563;
+
+  /* Brand accent */
+  --color-brand-emerald:   #006666;
+  --color-brand-navy:      #003366;
+  --color-brand-aqua:      #339999;
+  --color-brand-sky:       #6699CC;
+
+  /* Typography */
+  --font-sans:   'Inter', system-ui, sans-serif;
+  --font-display:'Inter', system-ui, sans-serif;
+
+  /* Border radius */
+  --radius-sm:   6px;
+  --radius:      10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+
+  /* Shadows */
+  --shadow-sm:   0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow:      0 4px 12px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05);
+  --shadow-md:   0 8px 24px rgba(0,0,0,0.09), 0 2px 6px rgba(0,0,0,0.05);
+  --shadow-lg:   0 16px 40px rgba(0,0,0,0.12), 0 4px 10px rgba(0,0,0,0.06);
+
+  /* Sizing */
+  --width-sidebar: 260px;
+}
+
 :root {
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 15px;
@@ -19,7 +69,7 @@ h1, h2, h3, h4, h5, h6 { font-family: 'Inter', system-ui, sans-serif; }
 
 #root { min-height: 100svh; }
 
-/* GDP iframe (Horários) — esconde scrollbar do shell mas deixa o iframe tomar todo o espaço */
+/* GDP iframe (Horários) */
 .gdp-frame {
   width: 100%;
   height: 100%;
