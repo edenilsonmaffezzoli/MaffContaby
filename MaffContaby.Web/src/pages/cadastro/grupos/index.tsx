@@ -1,24 +1,22 @@
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader } from '@/components/ui/card';
+import { CrudRow } from '@/components/ui/crud-list';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusMessage } from '@/components/ui/spinner';
 import { useHttpClient } from '@/hooks/use-http-client';
 import { createGroup, deleteGroup, getGroups, updateGroup, type GroupDto } from '@/services/groups-service';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { FolderOpen, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
-
-function PlusIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none">
-      <path d="M12 4v16M4 12h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
-    </svg>
-  );
-}
 
 export function GruposPage() {
   const httpClient = useHttpClient();
   const queryClient = useQueryClient();
 
-  const groupsQuery = useQuery({
-    queryKey: ['groups'],
-    queryFn: () => getGroups(httpClient),
-  });
+  const groupsQuery = useQuery({ queryKey: ['groups'], queryFn: () => getGroups(httpClient) });
 
   const createMutation = useMutation({
     mutationFn: (input: { name: string }) => createGroup(httpClient, input),
@@ -36,198 +34,155 @@ export function GruposPage() {
   });
 
   const groups = groupsQuery.data ?? [];
-  const canInteract = !groupsQuery.isFetching && !createMutation.isPending && !updateMutation.isPending && !deleteMutation.isPending;
+  const isMutating = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const canInteract = !groupsQuery.isFetching && !isMutating;
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <h1 className="title">Cadastro de Grupo</h1>
-          <div className="subtitle">Grupos usados nas movimentações</div>
-        </div>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader title="Cadastro de Grupo" subtitle="Grupos usados nas movimentações" />
 
-      <NovoGrupo disabled={!canInteract} onCreate={data => createMutation.mutate(data)} />
+      <NovoGrupo
+        disabled={!canInteract}
+        isLoading={createMutation.isPending}
+        onCreate={data => createMutation.mutate(data)}
+      />
 
-      <div className="card">
-        <div className="section-header">
-          <h2 className="section-title">Grupos</h2>
-          {groups.length > 0 ? <span className="badge badge--info">{groups.length} {groups.length === 1 ? 'item' : 'itens'}</span> : null}
+      <Card noPad>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-[15px] font-semibold text-gray-800 m-0">Grupos cadastrados</h2>
+          {groups.length > 0 ? (
+            <Badge variant="info">{groups.length} {groups.length === 1 ? 'grupo' : 'grupos'}</Badge>
+          ) : null}
         </div>
 
         {groupsQuery.isLoading ? (
-          <div className="status-bar status-bar--loading">
-            <div className="spinner" />
-            Carregando...
-          </div>
+          <div className="px-6"><StatusMessage type="loading">Carregando…</StatusMessage></div>
         ) : groupsQuery.isError ? (
-          <div className="status-bar status-bar--error">Falha ao carregar. Tente novamente.</div>
+          <div className="px-6"><StatusMessage type="error">Falha ao carregar. Tente novamente.</StatusMessage></div>
         ) : groups.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state__text">Nenhum grupo cadastrado</div>
-          </div>
+          <EmptyState icon={<FolderOpen size={22} />} title="Nenhum grupo cadastrado" description="Adicione o primeiro grupo acima" />
         ) : (
-          <div className="table-wrap">
-            <div className="table__head table__head--cad">
-              <div>Grupo</div>
-              <div className="right">Ações</div>
+          <div className="divide-y divide-gray-100">
+            <div className="grid px-4 py-2.5 bg-gray-50 border-b border-gray-100" style={{ gridTemplateColumns: '1fr auto' }}>
+              <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-gray-500">Grupo</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-gray-500 text-right">Ações</span>
             </div>
             {groups.map(g => (
               <GrupoRow
                 key={g.id}
                 group={g}
                 disabled={!canInteract}
+                isSaving={updateMutation.isPending}
                 onUpdate={data => updateMutation.mutate(data)}
-                onDelete={() => {
-                  const ok = window.confirm(`Excluir "${g.name}"?`);
-                  if (!ok) return;
-                  deleteMutation.mutate(g.id);
-                }}
+                onDelete={() => deleteMutation.mutate(g.id)}
               />
             ))}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
 
-function NovoGrupo(props: { disabled: boolean; onCreate: (data: { name: string }) => void }) {
+function NovoGrupo(props: {
+  disabled: boolean;
+  isLoading: boolean;
+  onCreate: (data: { name: string }) => void;
+}) {
   const [name, setName] = useState('');
   const maxLen = 50;
-
   const trimmed = name.trim();
+
   const validation = useMemo(() => {
-    if (!trimmed) return 'Grupo é obrigatório';
-    if (trimmed.length > maxLen) return `Grupo deve ter no máximo ${maxLen} caracteres`;
+    if (!trimmed) return null;
+    if (trimmed.length > maxLen) return `Máximo de ${maxLen} caracteres`;
     return null;
   }, [trimmed]);
 
-  const canSubmit = !props.disabled && !validation;
+  const canSubmit = !props.disabled && trimmed.length > 0 && !validation;
 
   return (
-    <div className="card">
-      <div className="section-header">
-        <h2 className="section-title">Adicionar</h2>
-      </div>
-      <div className="row row--wrap">
-        <div className="field field--grow">
-          <label className="label">Grupo</label>
-          <input
-            className="input"
+    <Card>
+      <CardHeader title="Adicionar Grupo" />
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="flex-1 min-w-[200px]">
+          <Input
+            label="Nome do grupo"
             placeholder="Ex: Alimentação"
             value={name}
             onChange={e => setName(e.target.value)}
             maxLength={maxLen}
             disabled={props.disabled}
+            error={validation ?? undefined}
+            hint={!validation ? `${trimmed.length}/${maxLen}` : undefined}
           />
-          <div style={{ marginTop: 6, fontSize: 12, color: validation ? 'var(--danger)' : 'var(--muted)' }}>
-            {validation ? validation : `${trimmed.length}/${maxLen}`}
-          </div>
         </div>
-
-        <div className="field">
-          <label className="label">&nbsp;</label>
-          <button
-            className="button button--success"
-            type="button"
-            disabled={!canSubmit}
-            onClick={() => {
-              props.onCreate({ name: trimmed });
-              setName('');
-            }}
-          >
-            <PlusIcon className="icon-16" />
-            Salvar
-          </button>
-        </div>
-        <div className="field">
-          <label className="label">&nbsp;</label>
-          <button className="button button--danger" type="button" disabled={props.disabled} onClick={() => setName('')}>
-            Cancelar
-          </button>
-        </div>
+        <Button
+          variant="primary"
+          loading={props.isLoading}
+          disabled={!canSubmit}
+          onClick={() => {
+            props.onCreate({ name: trimmed });
+            setName('');
+          }}
+        >
+          <Plus size={16} />
+          Adicionar
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 
 function GrupoRow(props: {
   group: GroupDto;
   disabled: boolean;
+  isSaving: boolean;
   onUpdate: (data: { id: string; name: string }) => void;
   onDelete: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(props.group.name);
   const maxLen = 50;
-
   const trimmed = name.trim();
+
   const validation = useMemo(() => {
     if (!trimmed) return 'Grupo é obrigatório';
-    if (trimmed.length > maxLen) return `Grupo deve ter no máximo ${maxLen} caracteres`;
+    if (trimmed.length > maxLen) return `Máximo de ${maxLen} caracteres`;
     return null;
   }, [trimmed]);
 
   const canSave = !props.disabled && !validation;
 
   return (
-    <div className="table__row table__row--cad">
-      {!isEditing ? (
-        <>
-          <div style={{ fontWeight: 600 }} className="ellipsis">
-            {props.group.name}
-          </div>
-          <div className="right" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-            <button className="button button--ghost button--sm" type="button" onClick={() => setIsEditing(true)} disabled={props.disabled}>
-              Editar
-            </button>
-            <button className="button button--danger button--sm" type="button" onClick={props.onDelete} disabled={props.disabled}>
-              Excluir
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <div>
-            <input
-              className="input input--small"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              maxLength={maxLen}
-              disabled={props.disabled}
-            />
-            <div style={{ marginTop: 6, fontSize: 12, color: validation ? 'var(--danger)' : 'var(--muted)' }}>
-              {validation ? validation : `${trimmed.length}/${maxLen}`}
-            </div>
-          </div>
-          <div className="right" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-            <button
-              className="button button--success button--sm"
-              type="button"
-              disabled={!canSave}
-              onClick={() => {
-                props.onUpdate({ id: props.group.id, name: trimmed });
-                setIsEditing(false);
-              }}
-            >
-              Salvar
-            </button>
-            <button
-              className="button button--danger button--sm"
-              type="button"
-              disabled={props.disabled}
-              onClick={() => {
-                setName(props.group.name);
-                setIsEditing(false);
-              }}
-            >
-              Cancelar
-            </button>
-          </div>
-        </>
-      )}
-    </div>
+    <CrudRow
+      disabled={props.disabled}
+      onEdit={() => setIsEditing(true)}
+      onDelete={props.onDelete}
+      isEditing={isEditing}
+      isSaving={props.isSaving}
+      canSave={canSave}
+      onSaveEdit={() => {
+        props.onUpdate({ id: props.group.id, name: trimmed });
+        setIsEditing(false);
+      }}
+      onCancelEdit={() => {
+        setName(props.group.name);
+        setIsEditing(false);
+      }}
+      editContent={
+        <Input
+          label="Nome do grupo"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          maxLength={maxLen}
+          disabled={props.disabled}
+          error={validation ?? undefined}
+          hint={!validation ? `${trimmed.length}/${maxLen}` : undefined}
+        />
+      }
+    >
+      <span className="font-semibold text-sm text-gray-800 truncate block">{props.group.name}</span>
+    </CrudRow>
   );
 }
-

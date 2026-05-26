@@ -1,3 +1,8 @@
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
+import { Select } from '@/components/ui/select';
+import { StatusMessage } from '@/components/ui/spinner';
 import { useHttpClient } from '@/hooks/use-http-client';
 import {
   clearDatabase,
@@ -10,6 +15,7 @@ import {
   type DbSnapshotV1,
 } from '@/services/import-service';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, Download, FileIcon, Info, Trash2, Upload, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 
 function formatHttpError(error: unknown, apiBaseUrl: string | undefined) {
@@ -17,66 +23,20 @@ function formatHttpError(error: unknown, apiBaseUrl: string | undefined) {
     message?: string;
     response?: { status?: number; statusText?: string; data?: unknown };
   };
-
   const status = e?.response?.status;
   const statusText = e?.response?.statusText;
   const data = e?.response?.data;
-
   if (typeof data === 'string' && data.trim()) {
     return status ? `${status} - ${data.trim()}` : data.trim();
   }
-
-  if (status) {
-    return statusText?.trim() ? `${status} - ${statusText.trim()}` : String(status);
-  }
-
+  if (status) return statusText?.trim() ? `${status} - ${statusText.trim()}` : String(status);
   const msg = e?.message?.trim();
   if (!msg) return 'Erro desconhecido';
-
   if (/network error|failed to fetch|err_network/i.test(msg)) {
     const base = apiBaseUrl?.trim() ? apiBaseUrl.trim() : '(sem baseURL)';
     return `Não consegui conectar na API (${base}). Verifique se a API está rodando.`;
   }
-
   return msg;
-}
-
-function UploadCloudIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M12 12v9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-      <path d="M8 17l4-5 4 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
-function DownloadIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none">
-      <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-      <path d="M7 14l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M3 19h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-    </svg>
-  );
-}
-
-function FileIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
-function CheckCircleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-      <path d="M22 4L12 14.01l-3-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
 }
 
 function isXlsxNotSupportedInWorkerError(error: unknown) {
@@ -104,9 +64,7 @@ export function ImportarPage() {
           const text = await file.text();
           const parsed = JSON.parse(text) as DbSnapshotV1;
           const normalized = normalizeSnapshotV1(parsed);
-          if (!normalized) {
-            throw new Error('Snapshot inválido (version).');
-          }
+          if (!normalized) throw new Error('Snapshot inválido (version).');
           return importContabilidadeSnapshot(httpClient, normalized, replaceAll);
         }
         if (file.name.toLowerCase().endsWith('.xlsx')) {
@@ -133,18 +91,14 @@ export function ImportarPage() {
     mutationFn: async () => {
       const blob = await exportContabilidade(httpClient);
       const fileName = `Contabilidade-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
-
       const type = blob.type.toLowerCase();
       if (type.includes('json')) {
         const text = await blob.text();
         const parsed = JSON.parse(text) as DbSnapshotV1;
         const normalized = normalizeSnapshotV1(parsed);
-        if (!normalized) {
-          throw new Error('Snapshot inválido (version).');
-        }
+        if (!normalized) throw new Error('Snapshot inválido (version).');
         return { blob: ContabilidadePlanilha.snapshotToXlsxBlob(normalized), fileName };
       }
-
       return { blob, fileName };
     },
     onSuccess: ({ blob, fileName }) => {
@@ -160,9 +114,7 @@ export function ImportarPage() {
   });
 
   const clearMutation = useMutation({
-    mutationFn: async () => {
-      await clearDatabase(httpClient);
-    },
+    mutationFn: async () => { await clearDatabase(httpClient); },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['assets'] });
       await queryClient.invalidateQueries({ queryKey: ['people'] });
@@ -170,9 +122,11 @@ export function ImportarPage() {
     },
   });
 
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
   const resultText = useMemo(() => {
     if (!mutation.data) return null;
-    return `Entradas importadas: ${mutation.data.entriesInserted} • Itens financeiros: ${mutation.data.assetsInserted}`;
+    return `Entradas importadas: ${mutation.data.entriesInserted} · Itens financeiros: ${mutation.data.assetsInserted}`;
   }, [mutation.data]);
 
   const importErrorText = useMemo(() => {
@@ -187,50 +141,33 @@ export function ImportarPage() {
 
   const canInteract = !mutation.isPending && !exportMutation.isPending && !clearMutation.isPending;
 
-  const pickFile = () => {
-    if (!canInteract) return;
-    fileInputRef.current?.click();
-  };
-
+  const pickFile = () => { if (canInteract) fileInputRef.current?.click(); };
   const setFirstFile = (files: FileList | File[]) => {
     const first = Array.isArray(files) ? files[0] : files.item(0);
     setFile(first ?? null);
   };
 
   return (
-    <div className="page">
-      <div className="page__header">
+    <div className="flex flex-col gap-5">
+      <PageHeader title="Importar" subtitle="Carrega dados do Excel ou JSON para o banco de dados" />
+
+      {/* Info banner */}
+      <div className="flex items-start gap-3 px-4 py-3.5 bg-[rgba(102,153,204,0.12)] border border-[rgba(102,153,204,0.3)] rounded-lg">
+        <Info size={16} className="text-[#6699CC] shrink-0 mt-0.5" />
         <div>
-          <h1 className="title">Importar</h1>
-          <div className="subtitle">Carrega dados do Excel ou JSON para o banco de dados</div>
+          <p className="text-[13px] font-semibold text-[#003366]">Formatos suportados</p>
+          <p className="text-xs text-[#6699CC] mt-0.5">
+            Arquivos <strong>.xlsx</strong> (Excel) ou <strong>.json</strong> (snapshot). Deixe em branco para importar do servidor.
+          </p>
         </div>
       </div>
 
-      <div className="card" style={{ background: 'var(--info-light)', border: '1px solid rgba(2,136,209,0.2)' }}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-          <div style={{ color: 'var(--info)', marginTop: 1 }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-              <path d="M12 16v-4M12 8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--info-dark)' }}>Formatos suportados</div>
-            <div style={{ fontSize: 12, color: 'var(--info)', marginTop: 2 }}>
-              Arquivos <strong>.xlsx</strong> (Excel) ou <strong>.json</strong> (snapshot). Deixe em branco para importar do servidor.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="section-header">
-          <h2 className="section-title">Configuração</h2>
-        </div>
-
-        <div className="row row--wrap">
-          <div className="field field--grow">
-            <label className="label">Arquivo (opcional)</label>
+      <Card>
+        <CardHeader title="Importar dados" />
+        <div className="flex flex-wrap gap-5 items-start">
+          {/* Dropzone */}
+          <div className="flex-1 min-w-[260px]">
+            <p className="text-xs font-semibold text-gray-500 mb-1.5">Arquivo <span className="font-normal text-gray-400">(opcional)</span></p>
             <input
               ref={fileInputRef}
               className="sr-only"
@@ -239,9 +176,7 @@ export function ImportarPage() {
               onChange={e => setFirstFile(e.target.files ?? [])}
               disabled={!canInteract}
             />
-
             <div
-              className={isDragging ? 'dropzone dropzone--active' : 'dropzone'}
               role="button"
               tabIndex={0}
               onClick={pickFile}
@@ -255,148 +190,147 @@ export function ImportarPage() {
                 setFirstFile(Array.from(e.dataTransfer.files));
               }}
               aria-disabled={!canInteract}
+              className={[
+                'border-2 border-dashed rounded-lg p-8 text-center cursor-pointer select-none transition-all duration-150',
+                isDragging
+                  ? 'border-primary bg-primary-light shadow-[0_0_0_4px_rgba(0,102,102,0.10)]'
+                  : 'border-gray-200 bg-gray-50 hover:border-primary/40 hover:bg-primary-light',
+                !canInteract ? 'opacity-55 cursor-not-allowed' : '',
+              ].join(' ')}
             >
-              <div className="dropzone__icon">
-                <UploadCloudIcon />
+              <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center mx-auto mb-3 text-primary">
+                <Upload size={20} />
               </div>
-              <div className="dropzone__title">Arraste o arquivo aqui</div>
-              <div className="dropzone__subtitle">ou clique para selecionar</div>
-              <div className="dropzone__hint">.xlsx ou .json</div>
+              <p className="font-semibold text-[14px] text-gray-700">Arraste o arquivo aqui</p>
+              <p className="text-[13px] text-gray-500 mt-1">ou clique para selecionar</p>
+              <span className="mt-2.5 inline-block text-[11px] text-gray-400 bg-white px-2.5 py-0.5 rounded-full border border-gray-200">.xlsx ou .json</span>
             </div>
 
             {file ? (
-              <div className="filepill">
-                <div className="filepill__icon">
-                  <FileIcon />
+              <div className="mt-3 border border-gray-200 rounded-lg px-3.5 py-3 flex items-center gap-3 bg-white">
+                <div className="w-9 h-9 rounded-lg bg-[rgba(102,153,204,0.16)] flex items-center justify-center text-[#6699CC] shrink-0">
+                  <FileIcon size={18} />
                 </div>
-                <div className="filepill__main">
-                  <div className="filepill__name">{file.name}</div>
-                  <div className="filepill__meta">{Math.max(1, Math.round(file.size / 1024))} KB</div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-[13px] truncate">{file.name}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">{Math.max(1, Math.round(file.size / 1024))} KB</p>
                 </div>
                 <button
-                  className="button button--ghost button--sm"
                   type="button"
                   onClick={() => setFile(null)}
                   disabled={!canInteract}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
                 >
-                  Remover
+                  <X size={14} />
                 </button>
               </div>
             ) : null}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="field">
-              <label className="label">Modo de importação</label>
-              <select
-                className="input"
-                value={replaceAll ? '1' : '0'}
-                onChange={e => setReplaceAll(e.target.value === '1')}
-                disabled={!canInteract}
-              >
-                <option value="1">Substituir tudo</option>
-                <option value="0">Mesclar dados</option>
-              </select>
-            </div>
+          {/* Controls */}
+          <div className="flex flex-col gap-3 min-w-[200px]">
+            <Select
+              label="Modo de importação"
+              value={replaceAll ? '1' : '0'}
+              onChange={e => setReplaceAll(e.target.value === '1')}
+              disabled={!canInteract}
+            >
+              <option value="1">Substituir tudo</option>
+              <option value="0">Mesclar dados</option>
+            </Select>
 
-            <div className="field">
-              <label className="label">&nbsp;</label>
-              <button
-                className="button button--primary"
-                type="button"
-                onClick={() => mutation.mutate()}
-                disabled={!canInteract}
-                style={{ width: '100%' }}
-              >
-                {mutation.isPending ? (
-                  <>
-                    <div className="spinner" style={{ borderColor: 'rgba(255,255,255,0.4)', borderTopColor: 'transparent' }} />
-                    Importando...
-                  </>
-                ) : 'Importar agora'}
-              </button>
-            </div>
+            <Button
+              variant="primary"
+              loading={mutation.isPending}
+              disabled={!canInteract}
+              onClick={() => mutation.mutate()}
+              className="w-full"
+            >
+              <Upload size={16} />
+              Importar agora
+            </Button>
 
-            <div className="field">
-              <button
-                className="button button--success"
-                type="button"
-                onClick={() => exportMutation.mutate()}
-                disabled={!canInteract}
-                style={{ width: '100%' }}
-              >
-                {exportMutation.isPending ? (
-                  <>
-                    <div className="spinner" style={{ borderColor: 'rgba(255,255,255,0.4)', borderTopColor: 'transparent' }} />
-                    Exportando...
-                  </>
-                ) : (
-                  <>
-                    <DownloadIcon className="icon-16" />
-                    Exportar
-                  </>
-                )}
-              </button>
-            </div>
+            <Button
+              variant="success"
+              loading={exportMutation.isPending}
+              disabled={!canInteract}
+              onClick={() => exportMutation.mutate()}
+              className="w-full"
+            >
+              <Download size={16} />
+              Exportar
+            </Button>
           </div>
         </div>
 
+        {/* Status messages */}
         {mutation.isError ? (
-          <div className="status-bar status-bar--error">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-              <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
+          <StatusMessage type="error">
             <div>
               <strong>Falha ao importar.</strong>
-              {importErrorText ? <div style={{ marginTop: 2, opacity: 0.85 }}>{importErrorText}</div> : null}
+              {importErrorText ? <div className="mt-0.5 opacity-85">{importErrorText}</div> : null}
             </div>
-          </div>
+          </StatusMessage>
         ) : null}
 
         {exportMutation.isError ? (
-          <div className="status-bar status-bar--error">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-              <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
+          <StatusMessage type="error">
             <div>
               <strong>Falha ao exportar.</strong>
-              {exportErrorText ? <div style={{ marginTop: 2, opacity: 0.85 }}>{exportErrorText}</div> : null}
+              {exportErrorText ? <div className="mt-0.5 opacity-85">{exportErrorText}</div> : null}
             </div>
-          </div>
+          </StatusMessage>
         ) : null}
 
         {resultText ? (
-          <div className="status-bar status-bar--success">
-            <CheckCircleIcon />
+          <StatusMessage type="success">
             <strong>{resultText}</strong>
-          </div>
+          </StatusMessage>
         ) : null}
 
-        <details style={{ marginTop: 14, opacity: 0.75 }}>
-          <summary style={{ cursor: 'pointer', userSelect: 'none', fontSize: 12 }}>
-            Opções avançadas
-          </summary>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-            <button
-              className="button button--danger button--sm"
-              type="button"
-              onClick={() => {
-                if (!canInteract) return;
-                const ok1 = window.confirm('Deseja apagar toda a base de dados?');
-                if (!ok1) return;
-                const ok2 = window.confirm('Isso é muito perigoso, está ciente?');
-                if (!ok2) return;
-                clearMutation.mutate();
-              }}
-              disabled={!canInteract}
-            >
-              {clearMutation.isPending ? 'Apagando...' : 'Limpar toda a base'}
-            </button>
-          </div>
-        </details>
-      </div>
+        {/* Danger zone */}
+        <div className="mt-5 pt-4 border-t border-gray-100">
+          <details className="group">
+            <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-600 transition-colors select-none list-none flex items-center gap-1.5">
+              <AlertCircle size={13} />
+              Zona de perigo
+            </summary>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 p-4 bg-[#FFEBEE] border border-[rgba(211,47,47,0.2)] rounded-lg">
+              <div>
+                <p className="text-sm font-semibold text-[#B71C1C]">Limpar toda a base de dados</p>
+                <p className="text-xs text-[#D32F2F] mt-0.5">Esta ação é irreversível. Todos os dados serão apagados.</p>
+              </div>
+              {showClearConfirm ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-[#B71C1C]">Tem certeza absoluta?</span>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    loading={clearMutation.isPending}
+                    disabled={!canInteract}
+                    onClick={() => { clearMutation.mutate(); setShowClearConfirm(false); }}
+                  >
+                    Sim, apagar tudo
+                  </Button>
+                  <Button variant="default" size="sm" onClick={() => setShowClearConfirm(false)}>
+                    Cancelar
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setShowClearConfirm(true)}
+                  disabled={!canInteract}
+                >
+                  <Trash2 size={14} />
+                  Limpar base
+                </Button>
+              )}
+            </div>
+          </details>
+        </div>
+      </Card>
     </div>
   );
 }

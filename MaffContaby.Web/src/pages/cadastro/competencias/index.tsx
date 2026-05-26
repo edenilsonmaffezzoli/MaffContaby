@@ -1,30 +1,27 @@
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader } from '@/components/ui/card';
+import { CrudRow } from '@/components/ui/crud-list';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusMessage } from '@/components/ui/spinner';
 import { useHttpClient } from '@/hooks/use-http-client';
 import { createCompetencia, deleteCompetencia, getCompetencias, type CompetenciaDto } from '@/services/competencias-service';
 import { competenciaToDateOnly, formatCompetencia } from '@/utils/format';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
-
-function PlusIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none">
-      <path d="M12 4v16M4 12h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
-    </svg>
-  );
-}
+import { CalendarDays, Plus } from 'lucide-react';
+import { useMemo } from 'react';
 
 function toMonth(value: string) {
-  if (!value) return '';
-  return value.slice(0, 7);
+  return value ? value.slice(0, 7) : '';
 }
 
 export function CompetenciasPage() {
   const httpClient = useHttpClient();
   const queryClient = useQueryClient();
 
-  const query = useQuery({
-    queryKey: ['competencias'],
-    queryFn: () => getCompetencias(httpClient),
-  });
+  const query = useQuery({ queryKey: ['competencias'], queryFn: () => getCompetencias(httpClient) });
 
   const createMutation = useMutation({
     mutationFn: (input: { value: string }) => createCompetencia(httpClient, input),
@@ -36,125 +33,112 @@ export function CompetenciasPage() {
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['competencias'] }),
   });
 
-  const items = useMemo(() => {
-    return (query.data ?? []).slice().sort((a, b) => b.value.localeCompare(a.value));
-  }, [query.data]);
+  const items = useMemo(
+    () => (query.data ?? []).slice().sort((a, b) => b.value.localeCompare(a.value)),
+    [query.data],
+  );
 
   const canInteract = !query.isFetching && !createMutation.isPending && !deleteMutation.isPending;
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <h1 className="title">Cadastro de Competência</h1>
-          <div className="subtitle">Competências usadas nos filtros e lançamentos</div>
-        </div>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader title="Cadastro de Competência" subtitle="Competências usadas nos filtros e lançamentos" />
 
-      <NovaCompetencia disabled={!canInteract} onCreate={data => createMutation.mutate(data)} />
+      <NovaCompetencia
+        disabled={!canInteract}
+        isLoading={createMutation.isPending}
+        onCreate={data => createMutation.mutate(data)}
+      />
 
-      <div className="card">
-        <div className="section-header">
-          <h2 className="section-title">Competências</h2>
-          {items.length > 0 ? <span className="badge badge--info">{items.length} {items.length === 1 ? 'item' : 'itens'}</span> : null}
+      <Card noPad>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-[15px] font-semibold text-gray-800 m-0">Competências cadastradas</h2>
+          {items.length > 0 ? (
+            <Badge variant="info">{items.length} {items.length === 1 ? 'item' : 'itens'}</Badge>
+          ) : null}
         </div>
 
         {query.isLoading ? (
-          <div className="status-bar status-bar--loading">
-            <div className="spinner" />
-            Carregando...
-          </div>
+          <div className="px-6"><StatusMessage type="loading">Carregando…</StatusMessage></div>
         ) : query.isError ? (
-          <div className="status-bar status-bar--error">Falha ao carregar. Tente novamente.</div>
+          <div className="px-6"><StatusMessage type="error">Falha ao carregar. Tente novamente.</StatusMessage></div>
         ) : items.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state__text">Nenhuma competência cadastrada</div>
-          </div>
+          <EmptyState icon={<CalendarDays size={22} />} title="Nenhuma competência cadastrada" description="Adicione a primeira competência acima" />
         ) : (
-          <div className="table-wrap">
-            <div className="table__head table__head--cad">
-              <div>Competência</div>
-              <div className="right">Ações</div>
+          <div className="divide-y divide-gray-100">
+            <div className="grid px-4 py-2.5 bg-gray-50 border-b border-gray-100" style={{ gridTemplateColumns: '1fr auto' }}>
+              <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-gray-500">Competência</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-gray-500 text-right">Ações</span>
             </div>
             {items.map(c => (
               <CompetenciaRow
                 key={c.id}
                 item={c}
                 disabled={!canInteract}
-                onDelete={() => {
-                  const ok = window.confirm(`Excluir competência ${toMonth(c.value)}?`);
-                  if (!ok) return;
-                  deleteMutation.mutate(c.id);
-                }}
+                isDeleting={deleteMutation.isPending}
+                onDelete={() => deleteMutation.mutate(c.id)}
               />
             ))}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
 
-function NovaCompetencia(props: { disabled: boolean; onCreate: (data: { value: string }) => void }) {
-  const [competencia, setCompetencia] = useState(() => formatCompetencia(new Date()));
-
+function NovaCompetencia(props: {
+  disabled: boolean;
+  isLoading: boolean;
+  onCreate: (data: { value: string }) => void;
+}) {
+  const defaultValue = formatCompetencia(new Date());
   const validation = useMemo(() => {
-    if (!competencia.trim()) return 'Competência é obrigatória';
-    if (!/^\d{4}-\d{2}$/.test(competencia.trim())) return 'Competência inválida';
+    if (!defaultValue.trim()) return 'Competência é obrigatória';
     return null;
-  }, [competencia]);
+  }, [defaultValue]);
 
   const canSubmit = !props.disabled && !validation;
 
   return (
-    <div className="card">
-      <div className="section-header">
-        <h2 className="section-title">Adicionar</h2>
-      </div>
-      <div className="row row--wrap">
-        <div className="field">
-          <label className="label">Competência</label>
-          <input
-            className="input"
+    <Card>
+      <CardHeader title="Adicionar Competência" />
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="min-w-[200px]">
+          <Input
+            label="Competência"
             type="month"
-            value={competencia}
-            onChange={e => setCompetencia(e.target.value)}
+            defaultValue={defaultValue}
+            id="nova-competencia"
             disabled={props.disabled}
           />
-          {validation ? (
-            <div style={{ marginTop: 6, fontSize: 12, color: 'var(--danger)' }}>{validation}</div>
-          ) : null}
         </div>
-
-        <div className="field">
-          <label className="label">&nbsp;</label>
-          <button
-            className="button button--success"
-            type="button"
-            disabled={!canSubmit}
-            onClick={() => props.onCreate({ value: competenciaToDateOnly(competencia.trim()) })}
-          >
-            <PlusIcon className="icon-16" />
-            Salvar
-          </button>
-        </div>
+        <Button
+          variant="primary"
+          loading={props.isLoading}
+          disabled={!canSubmit}
+          onClick={() => {
+            const input = document.getElementById('nova-competencia') as HTMLInputElement;
+            const value = input?.value;
+            if (value) props.onCreate({ value: competenciaToDateOnly(value.trim()) });
+          }}
+        >
+          <Plus size={16} />
+          Adicionar
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 
-function CompetenciaRow(props: { item: CompetenciaDto; disabled: boolean; onDelete: () => void }) {
+function CompetenciaRow(props: {
+  item: CompetenciaDto;
+  disabled: boolean;
+  isDeleting: boolean;
+  onDelete: () => void;
+}) {
   return (
-    <div className="table__row table__row--cad">
-      <div style={{ fontWeight: 600 }} className="ellipsis">
-        {toMonth(props.item.value)}
-      </div>
-      <div className="right" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-        <button className="button button--danger button--sm" type="button" disabled={props.disabled} onClick={props.onDelete}>
-          Excluir
-        </button>
-      </div>
-    </div>
+    <CrudRow disabled={props.disabled} onDelete={props.onDelete}>
+      <span className="font-semibold text-sm text-gray-800">{toMonth(props.item.value)}</span>
+    </CrudRow>
   );
 }
-

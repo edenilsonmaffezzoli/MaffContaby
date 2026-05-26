@@ -1,140 +1,51 @@
-import { useHttpClient } from '@/hooks/use-http-client';
 import { logout, me } from '@/services/auth-service';
+import { useHttpClient } from '@/hooks/use-http-client';
 import { useQuery } from '@tanstack/react-query';
+import {
+  BarChart2,
+  ChevronDown,
+  Clock,
+  FileText,
+  LogOut,
+  Menu,
+  Sparkles,
+  Tag,
+  Upload,
+  Users,
+  Wallet,
+  X,
+} from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-
-function MenuIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 6h16M4 12h16M4 18h7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CloseIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ChartIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 20h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M7 20V12M12 20V8M17 20V4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function WalletIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M3.5 7.5A3.5 3.5 0 0 1 7 4h12a1 1 0 0 1 0 2H7a1.5 1.5 0 0 0 0 3h13.5v9A3.5 3.5 0 0 1 17 21H7A3.5 3.5 0 0 1 3.5 17.5v-10Z"
-        stroke="currentColor" strokeWidth="2" strokeLinejoin="round"
-      />
-      <circle cx="17" cy="13" r="1.5" fill="currentColor" />
-    </svg>
-  );
-}
-
-function UploadIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M7 8l5-5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M3 15v3a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ClockIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 7v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
-
-function UsersIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" strokeWidth="2" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function FileTextIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M14 2H7a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V8l-6-6Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      <path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M8 13h8M8 17h8M8 9h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function TagIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M20 13l-7 7-11-11V2h7l11 11Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      <circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function LogoutIcon(props: { className?: string }) {
-  return (
-    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M15 17l5-5-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M20 12H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M12 21H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
 
 function getInitials(username: string): string {
   const trimmed = (username ?? '').trim();
   if (!trimmed) return '?';
   const parts = trimmed.split(/[\s._-]+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return trimmed.slice(0, 2).toUpperCase();
 }
+
+const ROUTE_TITLES: Record<string, string> = {
+  '/': 'Movimentações',
+  '/financas': 'Investimentos',
+  '/relatorios': 'Relatórios',
+  '/importar': 'Importar',
+  '/casos-teste-inteligentes': 'Casos de Teste IA',
+  '/gdp': 'Horários',
+  '/usuarios': 'Usuários',
+  '/cadastro/pessoas': 'Cadastro de Pessoa',
+  '/cadastro/grupos': 'Cadastro de Grupo',
+  '/cadastro/competencias': 'Cadastro de Competência',
+};
 
 function LogoMark() {
   return (
     <svg width="22" height="22" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
       <circle cx="32" cy="32" r="28" stroke="rgba(255,255,255,0.9)" strokeWidth="3.5" />
-      <path d="M18 46V36" stroke="var(--brand-aqua)" strokeWidth="4" strokeLinecap="round" />
-      <path d="M32 46V26" stroke="var(--brand-aqua)" strokeWidth="4" strokeLinecap="round" />
-      <path d="M46 46V18" stroke="var(--brand-aqua)" strokeWidth="4" strokeLinecap="round" />
+      <path d="M18 46V36" stroke="#339999" strokeWidth="4" strokeLinecap="round" />
+      <path d="M32 46V26" stroke="#339999" strokeWidth="4" strokeLinecap="round" />
+      <path d="M46 46V18" stroke="#339999" strokeWidth="4" strokeLinecap="round" />
       <path d="M15 48H49" stroke="rgba(255,255,255,0.9)" strokeWidth="3.5" strokeLinecap="round" />
     </svg>
   );
@@ -152,6 +63,8 @@ export function Layout() {
   const isGdpRoute = location.pathname.startsWith('/gdp');
   const token = localStorage.getItem('gdp_token')?.trim() ?? '';
 
+  const currentTitle = ROUTE_TITLES[location.pathname] ?? 'MaffContaby';
+
   const meQuery = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: () => me(httpClient),
@@ -162,178 +75,214 @@ export function Layout() {
   const user = meQuery.data?.user ?? null;
 
   const handleLogout = async () => {
-    try {
-      await logout(httpClient);
-    } catch {
-    }
+    try { await logout(httpClient); } catch { /* ignore */ }
     localStorage.removeItem('gdp_token');
     localStorage.removeItem('gdp_admin_user');
     localStorage.removeItem('maff_write_key');
     navigate('/login', { replace: true });
   };
 
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
+  const closeSidebar = () => setIsOpen(false);
+
+  if (!token) return <Navigate to="/login" replace />;
+
+  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+    [
+      'flex items-center gap-2.5 px-3 py-[10px] rounded-[10px] no-underline',
+      'font-sans font-medium text-sm transition-colors duration-150 relative',
+      isActive
+        ? 'bg-white/[0.16] text-white font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-[3px] before:h-[60%] before:bg-[#339999] before:rounded-r-[3px]'
+        : 'text-white/85 hover:bg-white/10 hover:text-white',
+    ].join(' ');
+
+  const subNavLinkClass = ({ isActive }: { isActive: boolean }) =>
+    [
+      'flex items-center gap-2.5 pl-3 pr-3 py-[9px] rounded-[10px] no-underline',
+      'font-sans font-medium text-[13px] transition-colors duration-150 relative',
+      isActive
+        ? 'bg-white/[0.16] text-white font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-[3px] before:h-[60%] before:bg-[#339999] before:rounded-r-[3px]'
+        : 'text-white/85 hover:bg-white/10 hover:text-white',
+    ].join(' ');
 
   return (
-    <div className="shell">
+    <div className="flex min-h-svh bg-[#F0F0F0]">
+      {/* Mobile toggle */}
       <button
-        className="sidebar-toggle"
         type="button"
         aria-label={isOpen ? 'Fechar menu' : 'Abrir menu'}
         onClick={() => setIsOpen(x => !x)}
+        className="lg:hidden fixed top-3.5 left-3.5 z-[60] w-10 h-10 rounded-[10px] border border-gray-200 bg-white text-gray-700 flex items-center justify-center shadow-sm"
       >
-        {isOpen ? <CloseIcon className="icon-20" /> : <MenuIcon className="icon-20" />}
+        {isOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
 
-      {isOpen ? <div className="sidebar-overlay" role="presentation" onClick={() => setIsOpen(false)} /> : null}
+      {/* Overlay */}
+      {isOpen && (
+        <div
+          role="presentation"
+          className="lg:hidden fixed inset-0 bg-black/50 z-50 backdrop-blur-[2px]"
+          onClick={closeSidebar}
+        />
+      )}
 
-      <aside className={isOpen ? 'sidebar sidebar--open' : 'sidebar'} aria-label="Navegação principal">
-        <div className="sidebar__inner">
-          <div className="sidebar__brand">
-            <div className="sidebar__brandmark">
+      {/* Sidebar */}
+      <aside
+        aria-label="Navegação principal"
+        className={[
+          'w-[260px] flex flex-col min-h-svh flex-shrink-0',
+          'bg-gradient-to-br from-[#006666] to-[#003366]',
+          'lg:sticky lg:top-0 lg:h-svh',
+          'lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-[55] lg:relative',
+          'transition-transform duration-[220ms] ease-[cubic-bezier(0.4,0,0.2,1)]',
+          'shadow-[0_16px_40px_rgba(0,0,0,0.12)]',
+          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+        ].join(' ')}
+      >
+        <div className="flex flex-col h-full overflow-hidden">
+          {/* Brand */}
+          <div className="flex items-center gap-3 px-[22px] py-7 border-b border-white/10">
+            <div className="w-10 h-10 rounded-[10px] bg-white/15 flex items-center justify-center shrink-0">
               <LogoMark />
             </div>
-            <div className="sidebar__brandtext">
-              <div className="sidebar__brandname">MaffContaby</div>
-              <div className="sidebar__brandsub">Gestão Contábil</div>
+            <div className="min-w-0">
+              <div className="font-display font-bold text-[15px] text-white tracking-[-0.2px] leading-tight">
+                MaffContaby
+              </div>
+              <div className="text-[11px] text-white/50 mt-0.5 tracking-[0.3px] uppercase">
+                Gestão Contábil
+              </div>
             </div>
           </div>
 
-          <nav className="sidebar__nav" aria-label="Menu principal">
-            <div className="sidebar__section-label">Menu</div>
-
+          {/* Nav */}
+          <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto" aria-label="Menu principal">
+            {/* Cadastro group */}
+            <div className="px-2.5 pt-3 pb-1.5 text-[10px] font-semibold tracking-[1px] uppercase text-white/40">
+              Cadastros
+            </div>
             <button
-              className={cadastroOpen ? 'sidelink sidelink--active' : 'sidelink'}
               type="button"
               aria-expanded={cadastroOpen}
               onClick={() => setIsCadastroOpen(x => !x)}
-              style={{ background: 'transparent', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}
+              className={[
+                'flex items-center gap-2.5 px-3 py-[10px] rounded-[10px] w-full text-left',
+                'font-sans font-medium text-sm transition-colors duration-150',
+                cadastroOpen
+                  ? 'bg-white/[0.16] text-white font-semibold'
+                  : 'text-white/85 hover:bg-white/10 hover:text-white',
+              ].join(' ')}
             >
-              <TagIcon className="icon-20" />
-              <span style={{ flex: 1 }}>Cadastro</span>
-              <ChevronDownIcon className={cadastroOpen ? 'icon-16 sidebar__chevron sidebar__chevron--open' : 'icon-16 sidebar__chevron'} />
+              <Tag size={20} className="shrink-0" />
+              <span className="flex-1">Cadastro</span>
+              <ChevronDown
+                size={16}
+                className={[
+                  'shrink-0 opacity-90 transition-transform duration-150',
+                  cadastroOpen ? 'rotate-180' : '',
+                ].join(' ')}
+              />
             </button>
 
-            {cadastroOpen ? (
-              <div className="sidebar__submenu" role="presentation">
-                <NavLink
-                  to="/cadastro/pessoas"
-                  className={({ isActive }) => (isActive ? 'sidelink sidelink--sub sidelink--active' : 'sidelink sidelink--sub')}
-                  onClick={() => setIsOpen(false)}
-                >
-                  <span>Cadastro de Pessoa</span>
+            {cadastroOpen && (
+              <div className="ml-5 flex flex-col gap-1 mt-1 mb-2">
+                <NavLink to="/cadastro/pessoas" className={subNavLinkClass} onClick={closeSidebar}>
+                  Cadastro de Pessoa
                 </NavLink>
-                <NavLink
-                  to="/cadastro/grupos"
-                  className={({ isActive }) => (isActive ? 'sidelink sidelink--sub sidelink--active' : 'sidelink sidelink--sub')}
-                  onClick={() => setIsOpen(false)}
-                >
-                  <span>Cadastro de Grupo</span>
+                <NavLink to="/cadastro/grupos" className={subNavLinkClass} onClick={closeSidebar}>
+                  Cadastro de Grupo
                 </NavLink>
-                <NavLink
-                  to="/cadastro/competencias"
-                  className={({ isActive }) => (isActive ? 'sidelink sidelink--sub sidelink--active' : 'sidelink sidelink--sub')}
-                  onClick={() => setIsOpen(false)}
-                >
-                  <span>Cadastro de Competência</span>
+                <NavLink to="/cadastro/competencias" className={subNavLinkClass} onClick={closeSidebar}>
+                  Cadastro de Competência
                 </NavLink>
               </div>
-            ) : null}
+            )}
 
-            <NavLink
-              to="/"
-              end
-              className={({ isActive }) => (isActive ? 'sidelink sidelink--active' : 'sidelink')}
-              onClick={() => setIsOpen(false)}
-            >
-              <ChartIcon className="icon-20" />
+            {/* Main nav */}
+            <div className="px-2.5 pt-3 pb-1.5 text-[10px] font-semibold tracking-[1px] uppercase text-white/40">
+              Operações
+            </div>
+            <NavLink to="/" end className={navLinkClass} onClick={closeSidebar}>
+              <BarChart2 size={20} className="shrink-0" />
               <span>Movimentações</span>
             </NavLink>
-            <NavLink
-              to="/financas"
-              className={({ isActive }) => (isActive ? 'sidelink sidelink--active' : 'sidelink')}
-              onClick={() => setIsOpen(false)}
-            >
-              <WalletIcon className="icon-20" />
+            <NavLink to="/financas" className={navLinkClass} onClick={closeSidebar}>
+              <Wallet size={20} className="shrink-0" />
               <span>Investimentos</span>
             </NavLink>
-            <NavLink
-              to="/relatorios"
-              className={({ isActive }) => (isActive ? 'sidelink sidelink--active' : 'sidelink')}
-              onClick={() => setIsOpen(false)}
-            >
-              <FileTextIcon className="icon-20" />
+            <NavLink to="/relatorios" className={navLinkClass} onClick={closeSidebar}>
+              <FileText size={20} className="shrink-0" />
               <span>Relatórios</span>
             </NavLink>
-            <NavLink
-              to="/importar"
-              className={({ isActive }) => (isActive ? 'sidelink sidelink--active' : 'sidelink')}
-              onClick={() => setIsOpen(false)}
-            >
-              <UploadIcon className="icon-20" />
+            <NavLink to="/importar" className={navLinkClass} onClick={closeSidebar}>
+              <Upload size={20} className="shrink-0" />
               <span>Importar</span>
             </NavLink>
-            <NavLink
-              to="/casos-teste-inteligentes"
-              className={({ isActive }) => (isActive ? 'sidelink sidelink--active' : 'sidelink')}
-              onClick={() => setIsOpen(false)}
-            >
-              <FileTextIcon className="icon-20" />
+
+            <div className="px-2.5 pt-3 pb-1.5 text-[10px] font-semibold tracking-[1px] uppercase text-white/40">
+              Ferramentas
+            </div>
+            <NavLink to="/casos-teste-inteligentes" className={navLinkClass} onClick={closeSidebar}>
+              <Sparkles size={20} className="shrink-0" />
               <span>Casos de Teste IA</span>
             </NavLink>
-            <NavLink
-              to="/gdp"
-              className={({ isActive }) => (isActive ? 'sidelink sidelink--active' : 'sidelink')}
-              onClick={() => setIsOpen(false)}
-            >
-              <ClockIcon className="icon-20" />
+            <NavLink to="/gdp" className={navLinkClass} onClick={closeSidebar}>
+              <Clock size={20} className="shrink-0" />
               <span>Horários</span>
             </NavLink>
-            <NavLink
-              to="/usuarios"
-              className={({ isActive }) => (isActive ? 'sidelink sidelink--active' : 'sidelink')}
-              onClick={() => setIsOpen(false)}
-            >
-              <UsersIcon className="icon-20" />
-              <span>Usuários</span>
-            </NavLink>
+
+            {user?.admin && (
+              <>
+                <div className="px-2.5 pt-3 pb-1.5 text-[10px] font-semibold tracking-[1px] uppercase text-white/40">
+                  Admin
+                </div>
+                <NavLink to="/usuarios" className={navLinkClass} onClick={closeSidebar}>
+                  <Users size={20} className="shrink-0" />
+                  <span>Usuários</span>
+                </NavLink>
+              </>
+            )}
           </nav>
 
-          <div className="sidebar__footer">
+          {/* Footer */}
+          <div className="px-4 py-[18px] border-t border-white/10 flex flex-col gap-2.5">
             {user ? (
-              <div className="sidebar__user">
-                <div className="sidebar__user-avatar" aria-hidden="true">
+              <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.09] hover:border-white/[0.14] transition-colors duration-150">
+                <div className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center font-display font-bold text-[13px] text-white tracking-[0.3px] uppercase bg-gradient-to-br from-[#339999] to-[#6699CC] shadow-[0_0_0_2px_rgba(255,255,255,0.10),0_2px_6px_rgba(0,0,0,0.25)]">
                   {getInitials(user.username)}
                 </div>
-                <div className="sidebar__user-info">
-                  <div className="sidebar__user-name">{user.username}</div>
-                  <div className="sidebar__user-role">
+                <div className="flex-1 min-w-0 flex flex-col leading-tight">
+                  <span className="font-semibold text-[13px] text-white truncate">{user.username}</span>
+                  <span className="text-[11px] text-white/50 mt-0.5 tracking-[0.2px]">
                     {user.admin ? 'Administrador' : 'Usuário'}
-                  </div>
+                  </span>
                 </div>
                 <button
-                  className="sidebar__user-logout"
                   type="button"
                   title="Sair"
-                  aria-label="Sair"
+                  aria-label="Sair da conta"
                   onClick={handleLogout}
+                  className="w-8 h-8 rounded-lg border border-transparent bg-transparent text-white/50 flex items-center justify-center cursor-pointer shrink-0 transition-all duration-150 hover:bg-red-500/15 hover:border-red-400/35 hover:text-red-300"
                 >
-                  <LogoutIcon className="icon-20" />
+                  <LogOut size={16} />
                 </button>
               </div>
             ) : null}
-            <div className="sidebar__copy">© 2026 MaffContaby · Versão Web</div>
+            <div className="text-[10.5px] text-white/40 text-center tracking-[0.3px]">
+              © 2026 MaffContaby · Versão Web
+            </div>
           </div>
         </div>
       </aside>
 
-      <main className="shell__main">
-        <div className="topbar">
-          <span className="topbar__title">MaffContaby</span>
+      {/* Main content */}
+      <main className="flex-1 min-w-0 flex flex-col">
+        {/* Mobile topbar */}
+        <div className="lg:hidden sticky top-0 z-40 h-[60px] bg-[#003366] text-white flex items-center px-4 pl-16 shadow-[0_2px_10px_rgba(0,51,102,0.24)]">
+          <span className="font-display font-bold text-base">{currentTitle}</span>
         </div>
-        <div className={isGdpRoute ? 'container container--full' : 'container'}>
+
+        <div className={isGdpRoute ? 'flex-1 min-h-0 flex flex-col' : 'max-w-[1140px] mx-auto px-7 py-8 pb-14 w-full lg:px-7 px-4 lg:py-8 py-5'}>
           <Outlet />
         </div>
       </main>
