@@ -1,30 +1,22 @@
 import { getApiBaseUrl } from '@/config/api-base-url';
 import { useHttpClient } from '@/hooks/use-http-client';
 import { gerarCasoTeste } from '@/services/casos-teste-service';
-import type { GerarCasoTesteResponse, ImageInput, QaseCase, SourceFileInput } from '@/types/casos-teste';
+import type { GerarCasoTesteResponse, ImageInput, QaseCase } from '@/types/casos-teste';
 import { openCasosTestePdf } from '@/utils/casos-teste-pdf';
-import { downloadPromptTxt, extractPromptFromGerarError } from '@/utils/download-prompt-txt';
 import {
-  downloadFixedQaseCsv,
   downloadQaseCsv,
   formatQaseCsvExportSummary,
-  QASE_CSV_IMPORT_HINT,
   type QaseCsvExportStats,
 } from '@/utils/qase-csv-export';
-import {
-  fileToBase64,
-  readSourceFromDirectoryPicker,
-  readSourceFromFileList,
-} from '@/utils/read-source-folder';
+import { fileToBase64 } from '@/utils/read-source-folder';
 import { useMutation } from '@tanstack/react-query';
 import { marked } from 'marked';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 
 function formatGerarMeta(meta: GerarCasoTesteResponse['meta']): string {
   const parts = [
     `Modelo: ${meta.model}`,
-    `Arquivos: ${meta.filesIncluded}`,
     meta.truncated ? 'Entrada truncada' : null,
     meta.urlContentFetched ? 'Página URL incluída no prompt' : null,
     meta.urlContentTruncated ? 'Conteúdo URL truncado' : null,
@@ -89,20 +81,14 @@ export function CasosTesteInteligentesPage() {
   if (!token) return <Navigate to="/login" replace />;
 
   const httpClient = useHttpClient();
-  const folderInputRef = useRef<HTMLInputElement | null>(null);
-  const csvFixInputRef = useRef<HTMLInputElement | null>(null);
   const [exportSummary, setExportSummary] = useState<QaseCsvExportStats | null>(null);
 
   const [systemPath, setSystemPath] = useState('');
-  const [sourcePathLabel, setSourcePathLabel] = useState('');
-  const [sourceFiles, setSourceFiles] = useState<SourceFileInput[]>([]);
-  const [sourceTruncated, setSourceTruncated] = useState(false);
   const [imagePreviews, setImagePreviews] = useState<ImagePreview[]>([]);
   const [markdown, setMarkdown] = useState('');
   const [cases, setCases] = useState<QaseCase[]>([]);
   const [metaInfo, setMetaInfo] = useState<string | null>(null);
-  const [lastPrompt, setLastPrompt] = useState('');
-  const [folderLoading, setFolderLoading] = useState(false);
+  const [showTargetAuth, setShowTargetAuth] = useState(false);
   const [targetLoginUrl, setTargetLoginUrl] = useState('');
   const [targetUsername, setTargetUsername] = useState('');
   const [targetPassword, setTargetPassword] = useState('');
@@ -121,20 +107,17 @@ export function CasosTesteInteligentesPage() {
       const hasTargetAuthComplete =
         Boolean(targetLoginUrl.trim()) && Boolean(targetUsername.trim()) && Boolean(targetPassword);
 
-      const targetAuth =
-        hasTargetAuthComplete
-          ? {
-              loginUrl: targetLoginUrl.trim(),
-              username: targetUsername.trim(),
-              password: targetPassword,
-              mode: targetAuthMode,
-            }
-          : undefined;
+      const targetAuth = hasTargetAuthComplete
+        ? {
+            loginUrl: targetLoginUrl.trim(),
+            username: targetUsername.trim(),
+            password: targetPassword,
+            mode: targetAuthMode,
+          }
+        : undefined;
 
       return gerarCasoTeste(httpClient, {
         systemPath: systemPath.trim() || undefined,
-        sourcePathLabel: sourcePathLabel.trim() || undefined,
-        sourceFiles: sourceFiles.length ? sourceFiles : undefined,
         images: images.length ? images : undefined,
         targetAuth,
       });
@@ -142,12 +125,7 @@ export function CasosTesteInteligentesPage() {
     onSuccess: data => {
       setMarkdown(data.markdown);
       setCases(data.cases);
-      setLastPrompt(data.prompt ?? '');
       setMetaInfo(formatGerarMeta(data.meta));
-    },
-    onError: error => {
-      const prompt = extractPromptFromGerarError(error);
-      if (prompt) setLastPrompt(prompt);
     },
   });
 
@@ -155,41 +133,6 @@ export function CasosTesteInteligentesPage() {
     if (!markdown.trim()) return '';
     return marked.parse(markdown, { async: false }) as string;
   }, [markdown]);
-
-  async function handleSelectFolder() {
-    setFolderLoading(true);
-    try {
-      const picker = await readSourceFromDirectoryPicker();
-      if (picker) {
-        setSourceFiles(picker.files);
-        setSourcePathLabel(picker.sourcePathLabel);
-        setSourceTruncated(picker.truncated);
-        return;
-      }
-      folderInputRef.current?.click();
-    } catch (err) {
-      if ((err as Error)?.name !== 'AbortError') {
-        alert(err instanceof Error ? err.message : 'Não foi possível ler a pasta');
-      }
-    } finally {
-      setFolderLoading(false);
-    }
-  }
-
-  async function handleFolderInputChange(files: FileList | null) {
-    if (!files?.length) return;
-    setFolderLoading(true);
-    try {
-      const first = files[0];
-      const root = first.webkitRelativePath?.split('/')[0] ?? 'pasta-selecionada';
-      const result = await readSourceFromFileList(files, root);
-      setSourceFiles(result.files);
-      setSourcePathLabel(result.sourcePathLabel);
-      setSourceTruncated(result.truncated);
-    } finally {
-      setFolderLoading(false);
-    }
-  }
 
   function handleImagesChange(fileList: FileList | null) {
     if (!fileList?.length) return;
@@ -211,22 +154,18 @@ export function CasosTesteInteligentesPage() {
 
   function handleClearAll() {
     setSystemPath('');
-    setSourcePathLabel('');
-    setSourceFiles([]);
-    setSourceTruncated(false);
     imagePreviews.forEach(p => URL.revokeObjectURL(p.url));
     setImagePreviews([]);
     setMarkdown('');
     setCases([]);
     setMetaInfo(null);
-    setLastPrompt('');
     setExportSummary(null);
+    setShowTargetAuth(false);
     setTargetLoginUrl('');
     setTargetUsername('');
     setTargetPassword('');
     setTargetAuthMode('auto');
     gerarMutation.reset();
-    if (folderInputRef.current) folderInputRef.current.value = '';
   }
 
   function handleExportCsv() {
@@ -240,19 +179,6 @@ export function CasosTesteInteligentesPage() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao gerar CSV.';
       alert(msg);
-    }
-  }
-
-  async function handleFixExistingFile(file: File) {
-    try {
-      const text = await file.text();
-      const stats = downloadFixedQaseCsv(text);
-      setExportSummary(stats);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao corrigir arquivo.';
-      alert(msg);
-    } finally {
-      if (csvFixInputRef.current) csvFixInputRef.current.value = '';
     }
   }
 
@@ -272,145 +198,124 @@ export function CasosTesteInteligentesPage() {
     (!hasTargetAuthAny || hasTargetAuthComplete) &&
     (hasTargetAuthComplete
       ? Boolean(systemPath.trim())
-      : Boolean(systemPath.trim()) || sourceFiles.length > 0 || imagePreviews.length > 0);
+      : Boolean(systemPath.trim()) || imagePreviews.length > 0);
 
   const apiBase = getApiBaseUrl();
 
   return (
     <div className="page">
       <div className="page__header">
-        <h1 className="title">Casos de Testes Inteligentes</h1>
-        <div className="subtitle">
-          Gere casos de teste completos com IA (Gemini) e exporte CSV para importação no Qase.io
-        </div>
-        <p className="muted" style={{ marginTop: 8, fontSize: 13, maxWidth: 720 }}>
-          {QASE_CSV_IMPORT_HINT}
-        </p>
+        <h1 className="title">Casos de Teste Inteligentes</h1>
+        <p className="subtitle">Gere casos com IA (Gemini) e exporte CSV para o Qase.io</p>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="field" style={{ marginBottom: 14 }}>
-          <label className="label" htmlFor="systemPath">Path do Sistema <span className="muted">(opcional)</span></label>
+          <label className="label" htmlFor="systemPath">
+            URL do sistema {hasTargetAuthComplete ? <span className="muted">(página após login)</span> : null}
+          </label>
           <input
             id="systemPath"
             className="input"
-            type="text"
-            placeholder="Ex.: /financas, /api/entries, módulo de login…"
+            type="url"
+            placeholder="https://seu-sistema.com.br/dashboard"
             value={systemPath}
             onChange={e => setSystemPath(e.target.value)}
           />
-          {hasTargetAuthAny ? (
-            <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-              Para autenticação no site alvo, informe URLs completas (inclua domínio) em “Path do Sistema” e “URL de login”.
-            </div>
-          ) : null}
         </div>
 
         <div className="field" style={{ marginBottom: 14 }}>
-          <label className="label">Sistema com login (opcional)</label>
-          <div className="muted" style={{ marginTop: 2, fontSize: 12 }}>
-            Use homologação e usuário de teste. A senha é enviada apenas na requisição para buscar o conteúdo e não aparece no CSV.
-          </div>
+          <button
+            type="button"
+            className="button"
+            style={{ width: '100%', justifyContent: 'space-between' }}
+            aria-expanded={showTargetAuth}
+            onClick={() => setShowTargetAuth(open => !open)}
+          >
+            <span>
+              Sistema com login
+              {hasTargetAuthComplete ? <span className="muted"> · configurado</span> : null}
+            </span>
+            <span aria-hidden="true">{showTargetAuth ? '▲' : '▼'}</span>
+          </button>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
-            <div>
-              <label className="label" style={{ fontSize: 13 }}>
-                URL de login
-              </label>
-              <input
-                className="input"
-                type="text"
-                placeholder="Ex.: https://app.exemplo.com/login"
-                value={targetLoginUrl}
-                onChange={e => setTargetLoginUrl(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="label" style={{ fontSize: 13 }}>
-                Modo
-              </label>
-              <select
-                className="input"
-                value={targetAuthMode}
-                onChange={e => setTargetAuthMode(e.target.value as 'auto' | 'form' | 'json')}
-              >
-                <option value="auto">Auto</option>
-                <option value="form">Formulário HTML</option>
-                <option value="json">API JSON</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="label" style={{ fontSize: 13 }}>
-                Usuário
-              </label>
-              <input
-                className="input"
-                type="text"
-                placeholder="Usuário de teste"
-                value={targetUsername}
-                onChange={e => setTargetUsername(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="label" style={{ fontSize: 13 }}>
-                Senha
-              </label>
-              <input
-                className="input"
-                type="password"
-                placeholder="Senha de teste"
-                value={targetPassword}
-                onChange={e => setTargetPassword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {hasTargetAuthAny && !hasTargetAuthComplete ? (
-            <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-              Preencha URL de login, usuário e senha para usar a autenticação no site alvo.
-            </div>
-          ) : null}
-        </div>
-
-        <div className="field" style={{ marginBottom: 14 }}>
-          <label className="label" htmlFor="sourcePath">
-            Caminho do Código Fonte
-          </label>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <input
-              id="sourcePath"
-              className="input"
-              type="text"
-              style={{ flex: '1 1 240px' }}
-              placeholder="Pasta selecionada ou caminho manual"
-              value={sourcePathLabel}
-              onChange={e => setSourcePathLabel(e.target.value)}
-            />
-            <button
-              type="button"
-              className="button"
-              disabled={folderLoading}
-              onClick={() => void handleSelectFolder()}
+          {showTargetAuth ? (
+            <div
+              style={{
+                marginTop: 10,
+                padding: 12,
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+                background: 'var(--surface-2, #f8f9fa)',
+              }}
             >
-              {folderLoading ? 'Lendo…' : 'Selecionar pasta'}
-            </button>
-          </div>
-          <input
-            ref={folderInputRef}
-            type="file"
-            multiple
-            // @ts-expect-error webkitdirectory
-            webkitdirectory=""
-            style={{ display: 'none' }}
-            onChange={e => void handleFolderInputChange(e.target.files)}
-          />
-          {sourceFiles.length > 0 ? (
-            <div className="muted" style={{ marginTop: 6, fontSize: 13 }}>
-              {sourceFiles.length} arquivo(s) carregado(s)
-              {sourceTruncated ? ' — limite de 150.000 caracteres atingido' : ''}
+              <p className="muted" style={{ margin: '0 0 12px', fontSize: 12 }}>
+                Opcional. Use credenciais de homologação; a senha não é salva nem vai para o CSV.
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label className="label" style={{ fontSize: 13 }}>
+                    URL de login
+                  </label>
+                  <input
+                    className="input"
+                    type="url"
+                    placeholder="https://seu-sistema.com.br/login"
+                    value={targetLoginUrl}
+                    onChange={e => setTargetLoginUrl(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="label" style={{ fontSize: 13 }}>
+                    Modo
+                  </label>
+                  <select
+                    className="input"
+                    value={targetAuthMode}
+                    onChange={e => setTargetAuthMode(e.target.value as 'auto' | 'form' | 'json')}
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="form">Formulário HTML</option>
+                    <option value="json">API JSON</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="label" style={{ fontSize: 13 }}>
+                    Usuário
+                  </label>
+                  <input
+                    className="input"
+                    type="text"
+                    placeholder="Usuário de teste"
+                    value={targetUsername}
+                    onChange={e => setTargetUsername(e.target.value)}
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div>
+                  <label className="label" style={{ fontSize: 13 }}>
+                    Senha
+                  </label>
+                  <input
+                    className="input"
+                    type="password"
+                    placeholder="Senha de teste"
+                    value={targetPassword}
+                    onChange={e => setTargetPassword(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                </div>
+              </div>
+
+              {hasTargetAuthAny && !hasTargetAuthComplete ? (
+                <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+                  Preencha URL de login, usuário e senha, e informe a URL do sistema acima.
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -465,22 +370,9 @@ export function CasosTesteInteligentesPage() {
         </button>
 
         {gerarMutation.isError ? (
-          <div style={{ marginTop: 12 }}>
-            <div className="alert alert--danger">
-              {formatHttpError(gerarMutation.error)}
-              {!localStorage.getItem('gdp_token') ? ' Faça login em /login.' : null}
-            </div>
-            {lastPrompt.trim() ? (
-              <button
-                type="button"
-                className="button"
-                style={{ marginTop: 8 }}
-                onClick={() => downloadPromptTxt(lastPrompt)}
-                title="Baixa o prompt enviado à IA nesta tentativa (mesmo com falha)"
-              >
-                Baixar prompt (.txt)
-              </button>
-            ) : null}
+          <div className="alert alert--danger" style={{ marginTop: 12 }}>
+            {formatHttpError(gerarMutation.error)}
+            {!localStorage.getItem('gdp_token') ? ' Faça login em /login.' : null}
           </div>
         ) : null}
 
@@ -489,11 +381,11 @@ export function CasosTesteInteligentesPage() {
         </div>
       </div>
 
-      {(markdown.trim() || gerarMutation.isSuccess || lastPrompt.trim()) && (
+      {(markdown.trim() || cases.length > 0) && (
         <div className="card">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12, alignItems: 'center' }}>
             <h2 className="title" style={{ fontSize: '1.1rem', margin: 0, flex: '1 1 auto' }}>
-              {markdown.trim() || cases.length ? 'Resultado' : 'Prompt da última tentativa'}
+              Resultado
             </h2>
             {metaInfo ? <span className="muted" style={{ fontSize: 12 }}>{metaInfo}</span> : null}
             <button type="button" className="button" onClick={handleClearAll}>
@@ -508,34 +400,8 @@ export function CasosTesteInteligentesPage() {
             >
               Exportar CSV para Qase
             </button>
-            <button
-              type="button"
-              className="button"
-              onClick={() => csvFixInputRef.current?.click()}
-            >
-              Corrigir CSV/XML existente
-            </button>
-            <input
-              ref={csvFixInputRef}
-              type="file"
-              accept=".csv,.xml,text/csv,application/xml,text/xml"
-              style={{ display: 'none' }}
-              onChange={e => {
-                const file = e.target.files?.[0];
-                if (file) void handleFixExistingFile(file);
-              }}
-            />
             <button type="button" className="button button--primary" onClick={handleExportPdf} disabled={!markdown.trim()}>
               Gerar PDF
-            </button>
-            <button
-              type="button"
-              className="button"
-              disabled={!lastPrompt.trim()}
-              onClick={() => downloadPromptTxt(lastPrompt)}
-              title="Baixa o prompt exato enviado à IA na última geração"
-            >
-              Baixar prompt (.txt)
             </button>
           </div>
 
@@ -552,12 +418,6 @@ export function CasosTesteInteligentesPage() {
             >
               {formatQaseCsvExportSummary(exportSummary)}
             </pre>
-          ) : null}
-
-          {!cases.length && markdown ? (
-            <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
-              O CSV usa a estrutura retornada pela IA. Se você editar apenas o markdown, regenere para atualizar o export Qase.
-            </p>
           ) : null}
 
           {markdown.trim() ? (
@@ -586,10 +446,6 @@ export function CasosTesteInteligentesPage() {
                 />
               </div>
             </div>
-          ) : lastPrompt.trim() && gerarMutation.isError ? (
-            <p className="muted" style={{ fontSize: 13 }}>
-              A geração falhou, mas o prompt enviado à IA está disponível para download acima ou no botão desta seção.
-            </p>
           ) : null}
 
           {cases.length > 0 ? (
