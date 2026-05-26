@@ -177,6 +177,32 @@
       </div>
     </div>
 
+    <!-- Day popover — full activity list for a day -->
+    <div id="dayPopover" class="day-popover" role="dialog" aria-modal="true" aria-labelledby="dayPopoverTitle" aria-hidden="true">
+      <div class="day-popover-backdrop" data-close-popover="true" aria-hidden="true"></div>
+      <div class="day-popover-card">
+        <div class="day-popover-header">
+          <div>
+            <p id="dayPopoverTitle" class="day-popover-title">—</p>
+            <p id="dayPopoverSubtitle" class="day-popover-subtitle">—</p>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button id="btnAddFromPopover" class="btn primary" type="button" title="Adicionar nova atividade neste dia">+ Nova</button>
+            <button id="btnFecharPopover" class="btn icon ghost" type="button" aria-label="Fechar lista do dia">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div id="dayPopoverList" class="day-popover-list" role="list"></div>
+        <div class="day-popover-footer">
+          <span><span id="dayPopoverCount">0</span> atividade(s)</span>
+          <span>Total do dia: <strong id="dayPopoverTotal">00h00</strong></span>
+        </div>
+      </div>
+    </div>
+
     <!-- Activity template (delete button uses SVG, no emoji) -->
     <template id="tplAtividade">
       <div class="activity">
