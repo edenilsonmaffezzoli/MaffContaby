@@ -421,27 +421,19 @@ export function CasosTesteInteligentesPage() {
           ) : null}
 
           {markdown.trim() ? (
-            <div className="casos-teste-editor" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, minHeight: 360 }}>
-              <div>
+            <div className="casos-teste-editor">
+              <div className="casos-teste-editor__col">
                 <label className="label">Markdown (editável)</label>
                 <textarea
-                  className="input"
-                  style={{
-                    width: '100%',
-                    minHeight: 320,
-                    fontFamily: 'ui-monospace, Consolas, monospace',
-                    fontSize: 13,
-                    resize: 'vertical',
-                  }}
+                  className="input casos-teste-editor__textarea"
                   value={markdown}
                   onChange={e => setMarkdown(e.target.value)}
                 />
               </div>
-              <div>
+              <div className="casos-teste-editor__col">
                 <label className="label">Pré-visualização</label>
                 <div
-                  className="casos-teste-preview card"
-                  style={{ minHeight: 320, maxHeight: 480, overflow: 'auto', padding: 14 }}
+                  className="casos-teste-preview casos-teste-editor__preview card"
                   dangerouslySetInnerHTML={{ __html: previewHtml }}
                 />
               </div>

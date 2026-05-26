@@ -1,6 +1,11 @@
 import { getApiBaseUrl } from '@/config/api-base-url';
-import axios from 'axios';
+import axios, { isAxiosError } from 'axios';
 import { useMemo } from 'react';
+
+function loginPath() {
+  const base = import.meta.env.BASE_URL || '/';
+  return `${base.replace(/\/?$/, '')}/login`;
+}
 
 export function useHttpClient() {
   const apiBaseUrl = getApiBaseUrl();
@@ -11,40 +16,32 @@ export function useHttpClient() {
     });
 
     client.interceptors.request.use(config => {
-      const method = (config.method ?? 'get').toLowerCase();
-      const isWrite = method === 'post' || method === 'put' || method === 'patch' || method === 'delete';
-      const url = String(config.url ?? '');
-
-      if (url.startsWith('/api/auth') || url.startsWith('/api/gdp') || url.startsWith('/api/gerar-caso-teste')) {
-        const token = localStorage.getItem('gdp_token')?.trim() ?? '';
-        if (token) {
-          config.headers = config.headers ?? {};
-          (config.headers as Record<string, string>)['authorization'] = `Bearer ${token}`;
-        }
-        return config;
-      }
-
-      if (!isWrite) return config;
-
-      const envKey = (import.meta.env.VITE_WRITE_KEY as string | undefined)?.trim();
-      let key = localStorage.getItem('maff_write_key')?.trim() ?? '';
-      if (!key && envKey) key = envKey;
-
-      if (!key) {
-        const input = window.prompt('Chave para salvar dados (apenas você e sua esposa):')?.trim();
-        if (input) {
-          key = input;
-          localStorage.setItem('maff_write_key', input);
-        }
-      }
-
-      if (key) {
+      const token = localStorage.getItem('gdp_token')?.trim() ?? '';
+      if (token) {
         config.headers = config.headers ?? {};
-        (config.headers as Record<string, string>)['x-maff-key'] = key;
+        (config.headers as Record<string, string>)['authorization'] = `Bearer ${token}`;
       }
-
       return config;
     });
+
+    client.interceptors.response.use(
+      response => response,
+      error => {
+        if (isAxiosError(error) && error.response?.status === 401) {
+          const url = String(error.config?.url ?? '');
+          const isPublicAuth =
+            url.includes('/api/auth/login') || url.includes('/api/auth/bootstrap');
+          if (!isPublicAuth) {
+            localStorage.removeItem('gdp_token');
+            localStorage.removeItem('gdp_admin_user');
+            if (!window.location.pathname.endsWith('/login')) {
+              window.location.assign(loginPath());
+            }
+          }
+        }
+        return Promise.reject(error);
+      },
+    );
 
     return client;
   }, [apiBaseUrl]);
