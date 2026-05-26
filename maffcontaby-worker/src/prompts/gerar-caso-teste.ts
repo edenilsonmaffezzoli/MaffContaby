@@ -1,4 +1,5 @@
 import type { FetchedPageContext } from '../fetch-system-url';
+import { AI_QASE_CSV_HEADER } from '../parse-ai-qase-csv';
 import type { GerarCasoTesteRequest, SourceFileInput } from '../types/gerar-caso-teste';
 
 export type PageContextForPrompt = Pick<
@@ -25,173 +26,74 @@ export function buildGerarCasoTestePrompt(
           .join('\n\n');
 
   return `OBJETIVO:
-Gerar casos de teste funcionais estruturados para importação no Qase.io.
+Gerar casos de teste funcionais estruturados para importação direta no Qase.io no formato CSV.
 
-Os testes devem ser organizados em:
-- Suites
+Os testes devem ser organizados hierarquicamente em:
+- Suites (módulos ou áreas principais do sistema)
 - SubSuites (quando necessário)
 - Casos de Teste
 
-Cada caso de teste deve conter:
-- Título
-- Descrição
-- Pré-condição
-- Passos/Ações
-- Resultado Esperado
+Cada caso deve conter: Título, Descrição, Pré-condição, Passos e Resultado Esperado.
 
 IMPORTANTE:
-Os testes devem possuir linguagem simples, clara e funcional.
+Os testes devem ter linguagem simples, clara, natural e funcional, como se fossem escritos por um QA funcional experiente. Foque no comportamento do usuário e nas regras de negócio.
 
-O objetivo é que QA funcional, Product Owner, Analista de negócio, Usuário-chave e Cliente consigam entender facilmente os cenários.
+DIRETRIZES DE ESCRITA
+- Escreva de forma objetiva e com linguagem natural
+- Sem excesso técnico
+- Foco no usuário final, regras de negócio e funcionalidade
+- Use português do Brasil
 
----
+NÃO GERAR TESTES TÉCNICOS
+Não inclua testes de HTML, CSS, JavaScript, API, banco de dados, performance, console, etc.
 
-## DIRETRIZES DE ESCRITA
+PRIORIZAR TESTES FUNCIONAIS
+Priorize: fluxos principais, navegação, cadastros, validações visíveis, mensagens de erro, permissões, relatórios e autenticação.
 
-Escreva os casos:
-- de forma objetiva
-- com linguagem natural
-- sem excesso técnico
-- com foco no comportamento do usuário
-- com foco em regras de negócio
-- com foco funcional
+ANÁLISE DINÂMICA DO SISTEMA
+Faça uma análise completa do site/sistema fornecido. Identifique por conta própria os módulos, telas, menus, formulários, fluxos e regras de negócio. Não force módulos pré-definidos. Adapte ao tipo real do sistema (landing page, sistema financeiro, e-commerce, dashboard, etc.).
 
-Os testes devem parecer escritos por um QA funcional experiente.
+ORGANIZAÇÃO DOS TESTES
+- Cada módulo principal vira uma Suite
+- Use SubSuite quando houver fluxos diferentes dentro do mesmo módulo
+- Ordene os casos por Suite → SubSuite
+- Evite uma única suite para todo o sistema
 
-NÃO utilizar:
-- termos técnicos complexos
-- linguagem de desenvolvimento
-- termos de infraestrutura
-- detalhes internos do sistema
+FORMATO DE SAÍDA — CSV QASE (OBRIGATÓRIO)
+Retorne APENAS o conteúdo do CSV, sem nenhuma frase, explicação, markdown ou código antes/depois.
 
----
+O CSV deve ter exatamente estas colunas nesta ordem:
+${AI_QASE_CSV_HEADER}
 
-## NÃO GERAR TESTES TÉCNICOS
+Regras do CSV:
+- Use vírgula (,) como separador
+- O campo "Steps" deve vir formatado assim:
+  1. Ação que o usuário realiza
+  Resultado esperado: O que deve acontecer na tela
 
-NÃO gerar testes relacionados a:
-- inspeção HTML, DOM, CSS, JavaScript, console do navegador
-- XPath, seletores, IDs técnicos, classes CSS
-- eventos internos frontend, logs internos
-- deploy, infraestrutura, pipeline
-- testes unitários, arquitetura, framework
-- inspeção de requests, testes técnicos de API
-- validações internas de banco, performance técnica, testes de código
+  2. Próxima ação...
+- Máximo 7 passos por caso
+- Priority: apenas low, medium ou high
+- Tags: separadas por ponto e vírgula (ex: happy-path;validacao)
+- Suite e Subsuite são obrigatórios
+- Todo o texto em português (Brasil)
 
----
+COBERTURA MÍNIMA
+- Site simples/landing: mínimo 15-25 casos
+- Sistema com funcionalidades: mínimo 3 casos por módulo principal (feliz + negativos)
+- Dê boa cobertura para fluxos críticos (login, cadastro, etc.)
 
-## PRIORIZAR TESTES FUNCIONAIS
-
-Priorizar:
-- fluxo principal, comportamento do usuário, regras de negócio
-- navegação, preenchimento de campos, validações visíveis, mensagens exibidas
-- permissões funcionais, persistência das informações
-- cenários positivos e negativos simples, usabilidade básica
-- CRUDs, filtros, pesquisas, relatórios, autenticação, integrações funcionais
-
----
-
-## ANÁLISE DO SISTEMA
-
-Faça análise completa do sistema: telas, menus, módulos, funcionalidades, regras de negócio, fluxos, permissões, integrações, formulários, cadastros, relatórios, mensagens e autenticação.
-
-Identifique automaticamente os módulos do sistema (ex.: Login, Usuários, Clientes, Eventos, Financeiro, Agenda, Relatórios, Configurações).
-
-Use código-fonte e imagens anexadas apenas como referência para entender o negócio — não cite detalhes técnicos de implementação nos casos.
+VALIDAÇÕES FINAIS
+- Garanta que cada caso tenha pelo menos 1 passo completo
+- Remova qualquer conteúdo técnico
+- Prioridades válidas
+- Agrupamento correto por Suite/Subsuite
 
 ---
 
-## ORGANIZAÇÃO DOS TESTES (OBRIGATÓRIO — NÃO LINEAR)
+## CONTEXTO DESTA EXECUÇÃO (use apenas para análise — não cite detalhes técnicos nos casos)
 
-NÃO gere uma lista única sequencial (CT001, CT002…) sem mudar de suite. Cada assunto/módulo do sistema deve ter sua própria suite.
-
-- Preencha **suite** (assunto/módulo) e **subsuite** (fluxo dentro do módulo) em CADA caso do JSON.
-- Ordene o array **cases[]** agrupado: todos os casos da mesma suite/subsuite juntos, depois o próximo assunto.
-- O assunto deve estar em **suite**, não repetido no título (evite títulos genéricos iguais).
-- Use **subsuite** quando houver ≥ 3 casos no mesmo assunto com fluxos diferentes (ex.: positivo/negativo, menu vs rodapé).
-
-Exemplo (site institucional):
-- suite **Navegação** → casos de menu (Página inicial, Sobre, Serviços, Eventos, Contato)
-- suite **Conteúdo e serviços** → Sobre Nós, listagem de serviços, detalhes, galeria, depoimentos
-- suite **Formulário de contato** → envio válido, campos obrigatórios, e-mail inválido
-
-Evite: duplicidade, cenários repetidos, casos excessivamente técnicos, uma única suite para todo o sistema.
-
-Use nomes profissionais e padronizados em português (Brasil).
-
----
-
-## PADRÃO DOS PASSOS
-
-Estrutura simples por passo:
-- action: o que o usuário faz (linguagem natural)
-- expected_result: o que deve acontecer na tela/sistema
-
-Exemplo:
-- action: "Informar nome do cliente e clicar em Salvar"
-- expected_result: "Cliente cadastrado com sucesso e mensagem de confirmação exibida"
-
-NÃO ESCREVER: "Validar retorno HTTP 200 após persistência do payload"
-ESCREVER: "Validar que o cadastro é salvo com sucesso"
-
-NÃO ESCREVER: "Validar renderização do componente após evento onClick"
-ESCREVER: "Ao clicar em Salvar, o sistema deve concluir o cadastro"
-
----
-
-## FORMATO DE EXPORTAÇÃO — CSV QASE (não XML)
-
-IMPORTANTE: o caso de teste não deve ser linear; deve seguir hierarquia suite → subsuite → casos.
-
-A aplicação converterá sua resposta em CSV oficial Qase.io (v2) com pastas **suite** e **subsuite** no repositório.
-
-Regras:
-- **suite** e **subsuite** no JSON são obrigatórios para organização (não coloque o assunto só em tags).
-- priority: apenas low, medium ou high (nunca critical)
-- tags: apenas labels extras (slugs), ex.: happy-path, regressao — não substituem suite/subsuite
-- até 7 passos por caso (action + expected_result)
-- title, description e preconditions obrigatórios em português (Brasil)
-
----
-
-## COBERTURA MÍNIMA (obrigatório)
-
-- Identifique cada módulo/tela/menu relevante e crie casos específicos (evite um único caso genérico por módulo).
-- Site institucional ou landing: procure **pelo menos 20 casos** cobrindo navegação, conteúdo, serviços, sobre, contato e rodapé.
-- Sistema com login/CRUD: **pelo menos 3 casos por módulo principal** (fluxo feliz + validações visíveis simples).
-- Fluxos críticos (login, contato, orçamento, salvar cadastro): **pelo menos 2 passos** por caso quando fizer sentido.
-- Cada caso deve ter description e preconditions preenchidos (não repetir só o título).
-
-## ENTREGAS (no JSON e no markdown)
-
-O campo **analysis** no JSON deve listar módulos, funcionalidades, lacunas e riscos.
-
-O campo **markdown** deve ser um **resumo executivo curto** (não replique todos os passos dos casos — eles já estão em cases[]):
-- módulos encontrados
-- quantidade de casos criados (igual ao tamanho de cases[])
-- funcionalidades identificadas
-- lacunas de cobertura
-- riscos (bullets curtos)
-
-Se o sistema for grande, no markdown agrupe apenas por suite/subsuite com títulos dos casos (sem copiar todos os passos).
-
----
-
-## VALIDAÇÕES FINAIS
-
-Antes de finalizar:
-- garantir linguagem funcional e simples
-- remover conteúdo excessivamente técnico
-- cada caso com ao menos 1 passo completo (action + expected_result)
-- prioridades válidas (low, medium, high)
-- no máximo 7 passos por caso
-- pelo menos 2 suites distintas quando houver 6 ou mais casos
-- array cases[] ordenado por suite, depois subsuite, depois título
-
----
-
-## CONTEXTO DESTA EXECUÇÃO
-
-- Path do sistema (módulo/rota/feature): ${systemPath}
+- Path do sistema (URL, módulo ou rota): ${systemPath}
 - Caminho raiz do código fonte: ${sourceLabel}
 - Arquivos de código incluídos: ${files.length}${truncated ? ' (lista truncada por limite de tamanho)' : ''}
 - Imagens anexadas (prints/diagramas): ${imageCount}
@@ -203,37 +105,5 @@ ${codeBlock}
 
 ---
 
-## FORMATO DE SAÍDA (JSON estrito, sem markdown fence)
-
-Retorne APENAS um objeto JSON válido:
-
-{
-  "markdown": "string — documento completo em PT-BR: resumo executivo (módulos, totais, riscos, lacunas) e casos agrupados por suite/subsuite com passos numerados",
-  "analysis": {
-    "modulos": ["string"],
-    "totalCasos": number,
-    "funcionalidades": ["string"],
-    "semCobertura": ["string"],
-    "riscos": ["string"]
-  },
-  "cases": [
-    {
-      "suite": "string — nome da suite, ex.: Login",
-      "subsuite": "string opcional — ex.: Recuperação de senha",
-      "title": "string",
-      "description": "string",
-      "preconditions": "string",
-      "priority": "low|medium|high",
-      "tags": ["string — tags adicionais além de suite/subsuite, em slug"],
-      "steps": [
-        { "action": "string", "expected_result": "string" }
-      ]
-    }
-  ]
-}
-
-Regras do JSON:
-- Mínimo 1 caso; cada caso com pelo menos 1 step com action e expected_result preenchidos.
-- Não inclua comentários nem texto fora do JSON.
-- Não retorne XML nem CSV cru; apenas este JSON.`;
+Lembrete final: a primeira linha da resposta deve ser exatamente o cabeçalho ${AI_QASE_CSV_HEADER}. Retorne somente o CSV.`;
 }
