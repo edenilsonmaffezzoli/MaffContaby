@@ -35,7 +35,7 @@ function formatGerarMeta(meta: GerarCasoTesteResponse['meta']): string {
       : meta.casesFromGemini != null
         ? `Casos da IA: ${meta.casesFromGemini}`
         : null,
-    meta.rawJsonLength != null ? `JSON IA: ${meta.rawJsonLength.toLocaleString('pt-BR')} caracteres` : null,
+    meta.rawJsonLength != null ? `Resposta IA: ${meta.rawJsonLength.toLocaleString('pt-BR')} caracteres` : null,
     meta.outputTruncated ? 'Saída da IA possivelmente cortada (aumente GEMINI_MAX_OUTPUT_TOKENS)' : null,
     meta.finishReason && meta.finishReason !== 'STOP' ? `finishReason: ${meta.finishReason}` : null,
     meta.suitesUsed?.length ? `Suites: ${meta.suitesUsed.join(', ')}` : null,

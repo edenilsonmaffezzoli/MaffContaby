@@ -1,6 +1,7 @@
 import { fetchSystemPathContent } from '../fetch-system-url';
 import { callGeminiJson, type GeminiImagePart } from '../gemini-client';
 import { groupCasesBySubject } from '../group-cases-by-subject';
+import { parseAiQaseCsv } from '../parse-ai-qase-csv';
 import { buildGerarCasoTestePrompt } from '../prompts/gerar-caso-teste';
 import type {
   GeminiAiResult,
@@ -273,33 +274,57 @@ export type ParseGeminiResult = GeminiAiResult & {
   casesDropped: number;
 };
 
-export function parseGeminiResult(raw: string): ParseGeminiResult {
-  const parsed = JSON.parse(stripJsonFence(raw)) as Record<string, unknown>;
-  let markdown = typeof parsed.markdown === 'string' ? parsed.markdown.trim() : '';
-  const analysis =
-    parsed.analysis && typeof parsed.analysis === 'object'
-      ? (parsed.analysis as Record<string, unknown>)
-      : undefined;
-  const modulos = extractModulos(analysis);
-  const { cases: normalized, rawCount, dropped } = normalizeCases(parsed.cases);
-  const grouped = groupCasesBySubject(normalized, modulos);
+function tryParseGeminiJson(raw: string): ParseGeminiResult | null {
+  try {
+    const parsed = JSON.parse(stripJsonFence(raw)) as Record<string, unknown>;
+    let markdown = typeof parsed.markdown === 'string' ? parsed.markdown.trim() : '';
+    const analysis =
+      parsed.analysis && typeof parsed.analysis === 'object'
+        ? (parsed.analysis as Record<string, unknown>)
+        : undefined;
+    const modulos = extractModulos(analysis);
+    const { cases: normalized, rawCount, dropped } = normalizeCases(parsed.cases);
+    if (!normalized.length) return null;
+    const grouped = groupCasesBySubject(normalized, modulos);
 
-  if (!markdown && grouped.cases.length === 0) {
-    throw new Error('JSON da IA sem markdown e sem cases');
+    if (analysis) {
+      const analysisBlock = formatAnalysisMarkdown(analysis);
+      markdown = markdown ? `${analysisBlock}\n\n---\n\n${markdown}` : analysisBlock;
+    }
+    return {
+      markdown: markdown || buildFallbackMarkdown(grouped.cases),
+      cases: grouped.cases,
+      suitesUsed: grouped.suitesUsed,
+      groupingWarning: grouped.groupingWarning,
+      casesFromGemini: rawCount,
+      casesAfterNormalize: grouped.cases.length,
+      casesDropped: dropped,
+    };
+  } catch {
+    return null;
   }
-  if (analysis) {
-    const analysisBlock = formatAnalysisMarkdown(analysis);
-    markdown = markdown ? `${analysisBlock}\n\n---\n\n${markdown}` : analysisBlock;
+}
+
+export function parseGeminiResult(raw: string): ParseGeminiResult {
+  try {
+    const { cases: normalized, rawCount, dropped } = parseAiQaseCsv(raw);
+    const grouped = groupCasesBySubject(normalized, []);
+    return {
+      markdown: buildFallbackMarkdown(grouped.cases),
+      cases: grouped.cases,
+      suitesUsed: grouped.suitesUsed,
+      groupingWarning: grouped.groupingWarning,
+      casesFromGemini: rawCount,
+      casesAfterNormalize: grouped.cases.length,
+      casesDropped: dropped,
+    };
+  } catch {
   }
-  return {
-    markdown: markdown || buildFallbackMarkdown(grouped.cases),
-    cases: grouped.cases,
-    suitesUsed: grouped.suitesUsed,
-    groupingWarning: grouped.groupingWarning,
-    casesFromGemini: rawCount,
-    casesAfterNormalize: grouped.cases.length,
-    casesDropped: dropped,
-  };
+
+  const fromJson = tryParseGeminiJson(raw);
+  if (fromJson) return fromJson;
+
+  throw new Error('Resposta da IA não é CSV Qase válido nem JSON de casos');
 }
 
 function buildFallbackMarkdown(cases: QaseCase[]) {
@@ -399,6 +424,7 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
       { apiKey, model, timeoutMs: timeoutSeconds * 1000, maxOutputTokens },
       prompt,
       geminiImages,
+      { jsonMode: false },
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Erro ao chamar Gemini';
@@ -408,11 +434,11 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
     return gerarCasoTesteError(msg, 502, prompt, reqImages);
   }
 
-  const rawJson = geminiOut.text;
+  const rawResponse = geminiOut.text;
 
   let result: ParseGeminiResult;
   try {
-    result = parseGeminiResult(rawJson);
+    result = parseGeminiResult(rawResponse);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Resposta inválida da IA';
     return gerarCasoTesteError(msg, 502, prompt, reqImages);
@@ -436,7 +462,7 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
       casesFromGemini: result.casesFromGemini,
       casesAfterNormalize: result.casesAfterNormalize,
       casesDropped: result.casesDropped,
-      rawJsonLength: rawJson.length,
+      rawJsonLength: rawResponse.length,
       outputTruncated: geminiOut.outputTruncated,
       finishReason: geminiOut.finishReason,
       urlContentFetched: pageContext.fetched,

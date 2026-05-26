@@ -26,14 +26,21 @@ type GeminiGenerateResponse = {
 
 const TRUNCATED_FINISH_REASONS = new Set(['MAX_TOKENS', 'RECITATION']);
 
+export type GeminiCallOptions = {
+  /** Quando true (padrão), força responseMimeType application/json. */
+  jsonMode?: boolean;
+};
+
 /**
- * Chama a API Gemini com saída JSON e suporte a imagens inline (base64).
+ * Chama a API Gemini com suporte a imagens inline (base64).
  */
 export async function callGeminiJson(
   config: GeminiConfig,
   prompt: string,
   images: GeminiImagePart[],
+  options: GeminiCallOptions = {},
 ): Promise<GeminiJsonResult> {
+  const jsonMode = options.jsonMode !== false;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent?key=${encodeURIComponent(config.apiKey)}`;
 
   const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [{ text: prompt }];
@@ -42,9 +49,11 @@ export async function callGeminiJson(
   }
 
   const generationConfig: Record<string, unknown> = {
-    responseMimeType: 'application/json',
     temperature: 0.35,
   };
+  if (jsonMode) {
+    generationConfig.responseMimeType = 'application/json';
+  }
   if (config.maxOutputTokens && config.maxOutputTokens > 0) {
     generationConfig.maxOutputTokens = config.maxOutputTokens;
   }
