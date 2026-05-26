@@ -1,7 +1,17 @@
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader } from '@/components/ui/card';
+import { CrudRow } from '@/components/ui/crud-list';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
+import { PageHeader } from '@/components/ui/page-header';
+import { Select } from '@/components/ui/select';
+import { StatusMessage } from '@/components/ui/spinner';
 import { useHttpClient } from '@/hooks/use-http-client';
 import { me } from '@/services/auth-service';
 import { createGdpUser, deleteGdpUser, listGdpUsers, updateGdpUser, type GdpUserDto } from '@/services/gdp-users-service';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus, ShieldAlert, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 
@@ -9,11 +19,7 @@ export function UsersPage() {
   const httpClient = useHttpClient();
   const queryClient = useQueryClient();
 
-  const meQuery = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: () => me(httpClient),
-    retry: false,
-  });
+  const meQuery = useQuery({ queryKey: ['auth', 'me'], queryFn: () => me(httpClient), retry: false });
 
   const usersQuery = useQuery({
     queryKey: ['gdp', 'users'],
@@ -40,85 +46,77 @@ export function UsersPage() {
 
   if (meQuery.isLoading) return null;
   if (meQuery.isError) return <Navigate to="/login" replace />;
+
   if (!meQuery.data?.user.admin) {
     return (
-      <div className="page">
-        <div className="page__header">
-          <div>
-            <h1 className="title">Usuários</h1>
-            <div className="subtitle">Acesso restrito</div>
+      <div className="flex flex-col gap-5">
+        <PageHeader title="Usuários" subtitle="Cadastro e permissões" />
+        <Card>
+          <div className="flex items-center gap-3 p-2">
+            <ShieldAlert size={18} className="text-[#D32F2F] shrink-0" />
+            <span className="text-sm font-medium text-[#B71C1C]">Apenas administradores podem acessar esta tela.</span>
           </div>
-        </div>
-        <div className="card">
-          <div className="status-bar status-bar--error">Apenas administradores podem acessar esta tela.</div>
-        </div>
+        </Card>
       </div>
     );
   }
 
   const users = usersQuery.data?.users ?? [];
-  const canInteract = !usersQuery.isFetching && !createMutation.isPending && !updateMutation.isPending && !deleteMutation.isPending;
+  const isMutating = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const canInteract = !usersQuery.isFetching && !isMutating;
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <h1 className="title">Usuários</h1>
-          <div className="subtitle">Cadastro e permissões (admin)</div>
-        </div>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader title="Usuários" subtitle="Cadastro e permissões (admin)" />
 
       <NewUserCard
         disabled={!canInteract}
+        isLoading={createMutation.isPending}
         onCreate={data => createMutation.mutate(data)}
       />
 
-      <div className="card">
-        <div className="section-header">
-          <h2 className="section-title">Lista</h2>
-          {users.length ? <span className="badge badge--info">{users.length} {users.length === 1 ? 'item' : 'itens'}</span> : null}
+      <Card noPad>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-[15px] font-semibold text-gray-800 m-0">Usuários cadastrados</h2>
+          {users.length > 0 ? (
+            <Badge variant="info">{users.length} {users.length === 1 ? 'usuário' : 'usuários'}</Badge>
+          ) : null}
         </div>
 
         {usersQuery.isLoading ? (
-          <div className="status-bar status-bar--loading">
-            <div className="spinner" />
-            Carregando...
-          </div>
+          <div className="px-6"><StatusMessage type="loading">Carregando…</StatusMessage></div>
         ) : usersQuery.isError ? (
-          <div className="status-bar status-bar--error">Falha ao carregar usuários.</div>
+          <div className="px-6"><StatusMessage type="error">Falha ao carregar usuários.</StatusMessage></div>
         ) : users.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state__text">Nenhum usuário</div>
-          </div>
+          <EmptyState icon={<Users size={22} />} title="Nenhum usuário cadastrado" />
         ) : (
-          <div className="table-wrap">
-            <div className="table__head table__head--cad" style={{ gridTemplateColumns: '1fr 120px 220px' }}>
-              <div>Usuário</div>
-              <div className="right">Admin</div>
-              <div className="right">Ações</div>
+          <div className="divide-y divide-gray-100">
+            <div className="grid px-4 py-2.5 bg-gray-50 border-b border-gray-100"
+              style={{ gridTemplateColumns: '1fr 100px auto' }}>
+              <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-gray-500">Usuário</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-gray-500 text-center">Admin</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-gray-500 text-right">Ações</span>
             </div>
             {users.map(u => (
               <UserRow
                 key={u.id}
                 user={u}
                 disabled={!canInteract}
+                isSaving={updateMutation.isPending}
                 onUpdate={data => updateMutation.mutate(data)}
-                onDelete={() => {
-                  const ok = window.confirm(`Excluir "${u.username}"?`);
-                  if (!ok) return;
-                  deleteMutation.mutate(u.id);
-                }}
+                onDelete={() => deleteMutation.mutate(u.id)}
               />
             ))}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
 
 function NewUserCard(props: {
   disabled: boolean;
+  isLoading: boolean;
   onCreate: (data: { username: string; password: string; admin: boolean }) => void;
 }) {
   const [username, setUsername] = useState('');
@@ -127,66 +125,72 @@ function NewUserCard(props: {
 
   const trimmed = username.trim();
   const validation = useMemo(() => {
-    if (!trimmed) return 'Usuário é obrigatório';
-    if (trimmed.length > 60) return 'Usuário deve ter no máximo 60 caracteres';
-    if (!password) return 'Senha é obrigatória';
-    if (password.length < 6) return 'Senha deve ter no mínimo 6 caracteres';
+    if (!trimmed) return null;
+    if (trimmed.length > 60) return 'Máximo 60 caracteres';
+    if (password && password.length < 6) return 'Senha mínima: 6 caracteres';
     return null;
   }, [trimmed, password]);
 
-  const canSubmit = !props.disabled && !validation;
+  const canSubmit = !props.disabled && trimmed.length > 0 && password.length > 0 && !validation;
 
   return (
-    <div className="card">
-      <div className="section-header">
-        <h2 className="section-title">Adicionar</h2>
-      </div>
-      <div className="row row--wrap">
-        <div className="field field--grow">
-          <label className="label">Usuário</label>
-          <input className="input" value={username} onChange={e => setUsername(e.target.value)} disabled={props.disabled} />
+    <Card>
+      <CardHeader title="Adicionar Usuário" />
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="flex-1 min-w-[180px]">
+          <Input
+            label="Usuário"
+            placeholder="nome de usuário"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            disabled={props.disabled}
+            error={validation && trimmed ? validation : undefined}
+          />
         </div>
-        <div className="field field--grow">
-          <label className="label">Senha</label>
-          <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} disabled={props.disabled} />
+        <div className="flex-1 min-w-[180px]">
+          <Input
+            label="Senha"
+            type="password"
+            placeholder="mínimo 6 caracteres"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            disabled={props.disabled}
+          />
         </div>
-        <div className="field">
-          <label className="label">Admin</label>
-          <select
-            className="input"
+        <div className="min-w-[130px]">
+          <Select
+            label="Nível"
             value={admin ? 'yes' : 'no'}
             onChange={e => setAdmin(e.target.value === 'yes')}
             disabled={props.disabled}
           >
-            <option value="no">Não</option>
-            <option value="yes">Sim</option>
-          </select>
+            <option value="no">Usuário</option>
+            <option value="yes">Administrador</option>
+          </Select>
         </div>
-        <div className="field">
-          <label className="label">&nbsp;</label>
-          <button
-            className="button button--success"
-            type="button"
-            disabled={!canSubmit}
-            onClick={() => {
-              props.onCreate({ username: trimmed, password, admin });
-              setUsername('');
-              setPassword('');
-              setAdmin(false);
-            }}
-          >
-            Salvar
-          </button>
-        </div>
+        <Button
+          variant="primary"
+          loading={props.isLoading}
+          disabled={!canSubmit}
+          onClick={() => {
+            props.onCreate({ username: trimmed, password, admin });
+            setUsername('');
+            setPassword('');
+            setAdmin(false);
+          }}
+        >
+          <Plus size={16} />
+          Adicionar
+        </Button>
       </div>
-      {validation ? <div style={{ marginTop: 10, fontSize: 13, color: 'var(--danger)' }}>{validation}</div> : null}
-    </div>
+    </Card>
   );
 }
 
 function UserRow(props: {
   user: GdpUserDto;
   disabled: boolean;
+  isSaving: boolean;
   onUpdate: (data: { id: string; username?: string; password?: string; admin?: boolean }) => void;
   onDelete: () => void;
 }) {
@@ -198,89 +202,80 @@ function UserRow(props: {
   const trimmed = username.trim();
   const validation = useMemo(() => {
     if (!trimmed) return 'Usuário é obrigatório';
-    if (trimmed.length > 60) return 'Usuário deve ter no máximo 60 caracteres';
-    if (password && password.length < 6) return 'Senha deve ter no mínimo 6 caracteres';
+    if (trimmed.length > 60) return 'Máximo 60 caracteres';
+    if (password && password.length < 6) return 'Senha mínima: 6 caracteres';
     return null;
   }, [trimmed, password]);
 
   const canSave = !props.disabled && !validation;
 
   return (
-    <div className="table__row table__row--cad" style={{ gridTemplateColumns: '1fr 120px 220px', alignItems: 'center' }}>
-      {!isEditing ? (
-        <>
-          <div style={{ fontWeight: 600 }} className="ellipsis">
-            {props.user.username}
-          </div>
-          <div className="right">
-            <span className={props.user.admin ? 'badge badge--success' : 'badge badge--neutral'}>{props.user.admin ? 'Sim' : 'Não'}</span>
-          </div>
-          <div className="right" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-            <button className="button button--ghost button--sm" type="button" onClick={() => setIsEditing(true)} disabled={props.disabled}>
-              Editar
-            </button>
-            <button className="button button--danger button--sm" type="button" onClick={props.onDelete} disabled={props.disabled}>
-              Excluir
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <div>
-            <input className="input input--small" value={username} onChange={e => setUsername(e.target.value)} disabled={props.disabled} />
-            {validation ? <div style={{ marginTop: 6, fontSize: 12, color: 'var(--danger)' }}>{validation}</div> : null}
-          </div>
-          <div className="right">
-            <select className="input input--small" value={admin ? 'yes' : 'no'} onChange={e => setAdmin(e.target.value === 'yes')} disabled={props.disabled}>
-              <option value="no">Não</option>
-              <option value="yes">Sim</option>
-            </select>
-            <div style={{ marginTop: 6 }}>
-              <input
-                className="input input--small"
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Nova senha (opcional)"
-                disabled={props.disabled}
-              />
-            </div>
-          </div>
-          <div className="right" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-            <button
-              className="button button--success button--sm"
-              type="button"
-              disabled={!canSave}
-              onClick={() => {
-                props.onUpdate({
-                  id: props.user.id,
-                  username: trimmed !== props.user.username ? trimmed : undefined,
-                  admin: admin !== props.user.admin ? admin : undefined,
-                  password: password ? password : undefined,
-                });
-                setPassword('');
-                setIsEditing(false);
-              }}
-            >
-              Salvar
-            </button>
-            <button
-              className="button button--danger button--sm"
-              type="button"
+    <CrudRow
+      disabled={props.disabled}
+      onEdit={() => setIsEditing(true)}
+      onDelete={props.onDelete}
+      isEditing={isEditing}
+      isSaving={props.isSaving}
+      canSave={canSave}
+      onSaveEdit={() => {
+        props.onUpdate({
+          id: props.user.id,
+          username: trimmed !== props.user.username ? trimmed : undefined,
+          admin: admin !== props.user.admin ? admin : undefined,
+          password: password ? password : undefined,
+        });
+        setPassword('');
+        setIsEditing(false);
+      }}
+      onCancelEdit={() => {
+        setUsername(props.user.username);
+        setAdmin(props.user.admin);
+        setPassword('');
+        setIsEditing(false);
+      }}
+      editContent={
+        <div className="flex flex-wrap gap-3">
+          <div className="flex-1 min-w-[160px]">
+            <Input
+              label="Usuário"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
               disabled={props.disabled}
-              onClick={() => {
-                setUsername(props.user.username);
-                setAdmin(props.user.admin);
-                setPassword('');
-                setIsEditing(false);
-              }}
-            >
-              Cancelar
-            </button>
+              error={validation ?? undefined}
+            />
           </div>
-        </>
-      )}
-    </div>
+          <div className="flex-1 min-w-[160px]">
+            <Input
+              label="Nova senha"
+              type="password"
+              placeholder="Deixe em branco para manter"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              disabled={props.disabled}
+            />
+          </div>
+          <div className="min-w-[130px]">
+            <Select
+              label="Nível"
+              value={admin ? 'yes' : 'no'}
+              onChange={e => setAdmin(e.target.value === 'yes')}
+              disabled={props.disabled}
+            >
+              <option value="no">Usuário</option>
+              <option value="yes">Administrador</option>
+            </Select>
+          </div>
+        </div>
+      }
+    >
+      <div className="grid items-center gap-3" style={{ gridTemplateColumns: '1fr 100px' }}>
+        <span className="font-semibold text-sm text-gray-800 truncate">{props.user.username}</span>
+        <div className="flex justify-center">
+          <Badge variant={props.user.admin ? 'success' : 'neutral'}>
+            {props.user.admin ? 'Admin' : 'Usuário'}
+          </Badge>
+        </div>
+      </div>
+    </CrudRow>
   );
 }
-

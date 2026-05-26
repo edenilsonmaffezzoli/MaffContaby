@@ -1,4 +1,10 @@
 import { getApiBaseUrl } from '@/config/api-base-url';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { PageHeader } from '@/components/ui/page-header';
+import { Select } from '@/components/ui/select';
+import { StatusMessage } from '@/components/ui/spinner';
 import { useHttpClient } from '@/hooks/use-http-client';
 import { gerarCasoTeste } from '@/services/casos-teste-service';
 import type { GerarCasoTesteResponse, ImageInput, QaseCase } from '@/types/casos-teste';
@@ -10,6 +16,16 @@ import {
 } from '@/utils/qase-csv-export';
 import { fileToBase64 } from '@/utils/read-source-folder';
 import { useMutation } from '@tanstack/react-query';
+import {
+  ChevronDown,
+  Download,
+  FileText,
+  Image,
+  Link,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { marked } from 'marked';
 import { useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
@@ -26,13 +42,10 @@ function formatGerarMeta(meta: GerarCasoTesteResponse['meta']): string {
     meta.authError ? `Autenticação: ${meta.authError}` : null,
     meta.casesAfterNormalize != null ? `Casos válidos: ${meta.casesAfterNormalize}` : null,
     meta.casesFromGemini != null && meta.casesDropped != null && meta.casesDropped > 0
-      ? `Descartados na normalização: ${meta.casesDropped} (de ${meta.casesFromGemini} da IA)`
+      ? `Descartados: ${meta.casesDropped} (de ${meta.casesFromGemini})`
       : meta.casesFromGemini != null
         ? `Casos da IA: ${meta.casesFromGemini}`
         : null,
-    meta.rawJsonLength != null ? `Resposta IA: ${meta.rawJsonLength.toLocaleString('pt-BR')} caracteres` : null,
-    meta.outputTruncated ? 'Saída da IA possivelmente cortada (aumente GEMINI_MAX_OUTPUT_TOKENS)' : null,
-    meta.finishReason && meta.finishReason !== 'STOP' ? `finishReason: ${meta.finishReason}` : null,
     meta.suitesUsed?.length ? `Suites: ${meta.suitesUsed.join(', ')}` : null,
     meta.groupingWarning ?? null,
   ].filter(Boolean);
@@ -55,19 +68,6 @@ function formatHttpError(error: unknown) {
   }
   if (status) return String(status);
   return e?.message?.trim() || 'Erro desconhecido';
-}
-
-function SparklesIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 2l1.2 4.2L17.5 8 13.2 9.2 12 13.5 10.8 9.2 6.5 8l4.3-1.8L12 2ZM5 14l.8 2.8L8.5 18l-2.7 1.2L5 22l-.8-2.8L1.5 18l2.7-1.2L5 14Zm14 0l.8 2.8 2.7 1.2-2.7 1.2-.8 2.8-.8-2.8-2.7-1.2 2.7-1.2.8-2.8Z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }
 
 type ImagePreview = {
@@ -103,19 +103,11 @@ export function CasosTesteInteligentesPage() {
           name: p.file.name,
         })),
       );
-
       const hasTargetAuthComplete =
         Boolean(targetLoginUrl.trim()) && Boolean(targetUsername.trim()) && Boolean(targetPassword);
-
       const targetAuth = hasTargetAuthComplete
-        ? {
-            loginUrl: targetLoginUrl.trim(),
-            username: targetUsername.trim(),
-            password: targetPassword,
-            mode: targetAuthMode,
-          }
+        ? { loginUrl: targetLoginUrl.trim(), username: targetUsername.trim(), password: targetPassword, mode: targetAuthMode }
         : undefined;
-
       return gerarCasoTeste(httpClient, {
         systemPath: systemPath.trim() || undefined,
         images: images.length ? images : undefined,
@@ -169,31 +161,23 @@ export function CasosTesteInteligentesPage() {
   }
 
   function handleExportCsv() {
-    if (!cases.length) {
-      alert('Não há casos estruturados para exportar. Gere novamente com a IA.');
-      return;
-    }
+    if (!cases.length) return alert('Não há casos estruturados para exportar. Gere novamente com a IA.');
     try {
       const stats = downloadQaseCsv(cases);
       setExportSummary(stats);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao gerar CSV.';
-      alert(msg);
+      alert(e instanceof Error ? e.message : 'Erro ao gerar CSV.');
     }
   }
 
   function handleExportPdf() {
-    if (!markdown.trim()) {
-      alert('Não há conteúdo para gerar PDF.');
-      return;
-    }
+    if (!markdown.trim()) return alert('Não há conteúdo para gerar PDF.');
     openCasosTestePdf(markdown, 'Casos de Teste Inteligentes');
   }
 
   const hasTargetAuthAny = Boolean(targetLoginUrl.trim() || targetUsername.trim() || targetPassword);
   const hasTargetAuthComplete =
     Boolean(targetLoginUrl.trim()) && Boolean(targetUsername.trim()) && Boolean(targetPassword);
-
   const canGenerate =
     (!hasTargetAuthAny || hasTargetAuthComplete) &&
     (hasTargetAuthComplete
@@ -203,105 +187,85 @@ export function CasosTesteInteligentesPage() {
   const apiBase = getApiBaseUrl();
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <h1 className="title">Casos de Teste Inteligentes</h1>
-        <p className="subtitle">Gere casos com IA (Gemini) e exporte CSV para o Qase.io</p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Casos de Teste Inteligentes"
+        subtitle="Gere casos com IA (Gemini) e exporte CSV para o Qase.io"
+      />
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="field" style={{ marginBottom: 14 }}>
-          <label className="label" htmlFor="systemPath">
-            URL do sistema {hasTargetAuthComplete ? <span className="muted">(página após login)</span> : null}
-          </label>
-          <input
-            id="systemPath"
-            className="input"
-            type="url"
-            placeholder="https://seu-sistema.com.br/dashboard"
-            value={systemPath}
-            onChange={e => setSystemPath(e.target.value)}
-          />
-        </div>
+      {/* Input card */}
+      <Card>
+        <CardHeader title="Configuração" description="Informe a URL do sistema e, opcionalmente, imagens de tela" />
 
-        <div className="field" style={{ marginBottom: 14 }}>
-          <button
-            type="button"
-            className="button"
-            style={{ width: '100%', justifyContent: 'space-between' }}
-            aria-expanded={showTargetAuth}
-            onClick={() => setShowTargetAuth(open => !open)}
-          >
-            <span>
-              Sistema com login
-              {hasTargetAuthComplete ? <span className="muted"> · configurado</span> : null}
-            </span>
-            <span aria-hidden="true">{showTargetAuth ? '▲' : '▼'}</span>
-          </button>
+        <div className="flex flex-col gap-4">
+          <div>
+            <Input
+              label={hasTargetAuthComplete ? 'URL do sistema (página após login)' : 'URL do sistema'}
+              type="url"
+              placeholder="https://seu-sistema.com.br/dashboard"
+              value={systemPath}
+              onChange={e => setSystemPath(e.target.value)}
+            />
+          </div>
 
-          {showTargetAuth ? (
-            <div
-              style={{
-                marginTop: 10,
-                padding: 12,
-                borderRadius: 8,
-                border: '1px solid var(--border)',
-                background: 'var(--surface-2, #f8f9fa)',
-              }}
+          {/* Auth toggle */}
+          <div>
+            <button
+              type="button"
+              aria-expanded={showTargetAuth}
+              onClick={() => setShowTargetAuth(open => !open)}
+              className={[
+                'flex items-center justify-between w-full px-4 py-3 rounded-lg border transition-colors',
+                showTargetAuth || hasTargetAuthComplete
+                  ? 'border-primary/30 bg-primary-light text-primary'
+                  : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100',
+              ].join(' ')}
             >
-              <p className="muted" style={{ margin: '0 0 12px', fontSize: 12 }}>
-                Opcional. Use credenciais de homologação; a senha não é salva nem vai para o CSV.
-              </p>
+              <div className="flex items-center gap-2">
+                <Link size={16} />
+                <span className="text-sm font-medium">
+                  Sistema com login
+                  {hasTargetAuthComplete ? (
+                    <span className="ml-2 text-[11px] font-semibold bg-[rgba(0,102,102,0.15)] text-[#006666] px-1.5 py-0.5 rounded-full">
+                      configurado
+                    </span>
+                  ) : null}
+                </span>
+              </div>
+              <ChevronDown size={16} className={['transition-transform duration-150', showTargetAuth ? 'rotate-180' : ''].join(' ')} />
+            </button>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <label className="label" style={{ fontSize: 13 }}>
-                    URL de login
-                  </label>
-                  <input
-                    className="input"
+            {showTargetAuth && (
+              <div className="mt-2 p-4 rounded-lg border border-gray-200 bg-gray-50">
+                <p className="text-xs text-gray-500 mb-3">
+                  Opcional. Use credenciais de homologação — a senha não é salva nem vai para o CSV.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label="URL de login"
                     type="url"
                     placeholder="https://seu-sistema.com.br/login"
                     value={targetLoginUrl}
                     onChange={e => setTargetLoginUrl(e.target.value)}
                   />
-                </div>
-
-                <div>
-                  <label className="label" style={{ fontSize: 13 }}>
-                    Modo
-                  </label>
-                  <select
-                    className="input"
+                  <Select
+                    label="Modo"
                     value={targetAuthMode}
                     onChange={e => setTargetAuthMode(e.target.value as 'auto' | 'form' | 'json')}
                   >
-                    <option value="auto">Auto</option>
+                    <option value="auto">Auto-detectar</option>
                     <option value="form">Formulário HTML</option>
                     <option value="json">API JSON</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="label" style={{ fontSize: 13 }}>
-                    Usuário
-                  </label>
-                  <input
-                    className="input"
-                    type="text"
+                  </Select>
+                  <Input
+                    label="Usuário"
                     placeholder="Usuário de teste"
                     value={targetUsername}
                     onChange={e => setTargetUsername(e.target.value)}
                     autoComplete="off"
                   />
-                </div>
-
-                <div>
-                  <label className="label" style={{ fontSize: 13 }}>
-                    Senha
-                  </label>
-                  <input
-                    className="input"
+                  <Input
+                    label="Senha"
                     type="password"
                     placeholder="Senha de teste"
                     value={targetPassword}
@@ -309,143 +273,138 @@ export function CasosTesteInteligentesPage() {
                     autoComplete="new-password"
                   />
                 </div>
+                {hasTargetAuthAny && !hasTargetAuthComplete ? (
+                  <p className="text-xs text-amber-600 mt-2">
+                    Preencha URL de login, usuário e senha para ativar a autenticação.
+                  </p>
+                ) : null}
               </div>
-
-              {hasTargetAuthAny && !hasTargetAuthComplete ? (
-                <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-                  Preencha URL de login, usuário e senha, e informe a URL do sistema acima.
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="field" style={{ marginBottom: 14 }}>
-          <label className="label">
-            Imagens <span className="muted">(opcional, máx. 8)</span>
-          </label>
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={e => {
-              handleImagesChange(e.target.files);
-              e.target.value = '';
-            }}
-          />
-          {imagePreviews.length > 0 ? (
-            <div className="casos-teste-images" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
-              {imagePreviews.map(p => (
-                <div key={p.id} className="casos-teste-images__item" style={{ position: 'relative' }}>
-                  <img
-                    src={p.url}
-                    alt={p.file.name}
-                    style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }}
-                  />
-                  <button
-                    type="button"
-                    className="button button--ghost button--sm"
-                    style={{ position: 'absolute', top: -6, right: -6, padding: '2px 6px', minWidth: 0 }}
-                    onClick={() => removeImage(p.id)}
-                    aria-label="Remover imagem"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-
-        <button
-          type="button"
-          className="button button--primary"
-          disabled={!canGenerate || gerarMutation.isPending}
-          onClick={() => gerarMutation.mutate()}
-        >
-          <SparklesIcon />
-          <span style={{ marginLeft: 6 }}>
-            {gerarMutation.isPending ? 'Gerando com IA…' : 'Gerar Caso de Teste com IA'}
-          </span>
-        </button>
-
-        {gerarMutation.isError ? (
-          <div className="alert alert--danger" style={{ marginTop: 12 }}>
-            {formatHttpError(gerarMutation.error)}
-            {!localStorage.getItem('gdp_token') ? ' Faça login em /login.' : null}
+            )}
           </div>
-        ) : null}
 
-        <div className="muted" style={{ marginTop: 10, fontSize: 12 }}>
-          API: {apiBase} · Requer login GDP
-        </div>
-      </div>
+          {/* Images */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-gray-500">
+                Imagens <span className="font-normal text-gray-400">(opcional, máx. 8)</span>
+              </label>
+              {imagePreviews.length > 0 && (
+                <span className="text-[11px] text-gray-400">{imagePreviews.length}/8</span>
+              )}
+            </div>
 
-      {(markdown.trim() || cases.length > 0) && (
-        <div className="card">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12, alignItems: 'center' }}>
-            <h2 className="title" style={{ fontSize: '1.1rem', margin: 0, flex: '1 1 auto' }}>
-              Resultado
-            </h2>
-            {metaInfo ? <span className="muted" style={{ fontSize: 12 }}>{metaInfo}</span> : null}
-            <button type="button" className="button" onClick={handleClearAll}>
-              Limpar Tudo
-            </button>
-            <button
-              type="button"
-              className="button"
-              onClick={handleExportCsv}
-              disabled={!cases.length}
-              title="CSV Qase.io v2 com pastas por assunto (suite/subsuite)"
+            {imagePreviews.length < 8 && (
+              <label className="flex items-center gap-2 cursor-pointer w-fit px-3 py-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition-colors text-sm text-gray-600">
+                <Image size={15} />
+                Adicionar imagens
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="sr-only"
+                  onChange={e => { handleImagesChange(e.target.files); e.target.value = ''; }}
+                />
+              </label>
+            )}
+
+            {imagePreviews.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {imagePreviews.map(p => (
+                  <div key={p.id} className="relative group">
+                    <img
+                      src={p.url}
+                      alt={p.file.name}
+                      className="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(p.id)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gray-800 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label="Remover imagem"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <Button
+              variant="primary"
+              size="lg"
+              loading={gerarMutation.isPending}
+              disabled={!canGenerate || gerarMutation.isPending}
+              onClick={() => gerarMutation.mutate()}
             >
-              Exportar CSV para Qase
-            </button>
-            <button type="button" className="button button--primary" onClick={handleExportPdf} disabled={!markdown.trim()}>
-              Gerar PDF
-            </button>
+              <Sparkles size={18} />
+              {gerarMutation.isPending ? 'Gerando com IA…' : 'Gerar Casos de Teste'}
+            </Button>
+            <p className="text-[11px] text-gray-400">API: {apiBase}</p>
+          </div>
+
+          {gerarMutation.isError ? (
+            <StatusMessage type="error">
+              {formatHttpError(gerarMutation.error)}
+            </StatusMessage>
+          ) : null}
+        </div>
+      </Card>
+
+      {/* Results */}
+      {(markdown.trim() || cases.length > 0) && (
+        <Card>
+          <div className="flex flex-wrap items-center gap-3 mb-5">
+            <h2 className="text-[15px] font-semibold text-gray-800 m-0 flex-1">Resultado</h2>
+            {metaInfo ? (
+              <span className="text-[11px] text-gray-400 max-w-[400px] truncate">{metaInfo}</span>
+            ) : null}
+            {cases.length > 0 && (
+              <span className="text-[11px] text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full font-medium">
+                {cases.length} caso{cases.length !== 1 ? 's' : ''}
+              </span>
+            )}
+            <Button variant="ghost" size="sm" onClick={handleExportCsv} disabled={!cases.length}>
+              <Download size={14} />
+              CSV Qase
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleExportPdf} disabled={!markdown.trim()}>
+              <FileText size={14} />
+              PDF
+            </Button>
+            <Button variant="default" size="sm" onClick={handleClearAll}>
+              <Trash2 size={14} />
+              Limpar
+            </Button>
           </div>
 
           {exportSummary ? (
-            <pre
-              className="card"
-              style={{
-                marginBottom: 12,
-                padding: 12,
-                fontSize: 13,
-                whiteSpace: 'pre-wrap',
-                background: 'var(--surface-2, #f5f5f5)',
-              }}
-            >
+            <pre className="text-[12px] bg-gray-50 border border-gray-200 rounded-lg p-3 whitespace-pre-wrap mb-4 text-gray-700">
               {formatQaseCsvExportSummary(exportSummary)}
             </pre>
           ) : null}
 
           {markdown.trim() ? (
-            <div className="casos-teste-editor">
-              <div className="casos-teste-editor__col">
-                <label className="label">Markdown (editável)</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-gray-500">Markdown (editável)</label>
                 <textarea
-                  className="input casos-teste-editor__textarea"
+                  className="flex-1 min-h-[360px] w-full font-mono text-[13px] p-3.5 rounded-lg border border-gray-200 bg-gray-50 outline-none focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(0,102,102,0.10)] transition-all resize-vertical"
                   value={markdown}
                   onChange={e => setMarkdown(e.target.value)}
                 />
               </div>
-              <div className="casos-teste-editor__col">
-                <label className="label">Pré-visualização</label>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-gray-500">Pré-visualização</label>
                 <div
-                  className="casos-teste-preview casos-teste-editor__preview card"
+                  className="flex-1 min-h-[360px] overflow-auto p-4 rounded-lg border border-gray-200 bg-white ct-preview"
                   dangerouslySetInnerHTML={{ __html: previewHtml }}
                 />
               </div>
             </div>
           ) : null}
-
-          {cases.length > 0 ? (
-            <p className="muted" style={{ marginTop: 10, fontSize: 13 }}>
-              {cases.length} caso(s) prontos para importação no Qase (Source: Qase → CSV).
-            </p>
-          ) : null}
-        </div>
+        </Card>
       )}
     </div>
   );

@@ -15,7 +15,16 @@ function GdpPage() {
   const token = localStorage.getItem('gdp_token')?.trim() ?? '';
   if (!token) return <Navigate to="/login" replace />;
   const src = `${import.meta.env.BASE_URL}gdp/index.html`;
-  return <iframe title="GDP — Registro Diário" src={src} style={{ width: '100%', height: '100%', display: 'block', border: 0 }} />;
+  return (
+    <div className="flex-1 min-h-0 flex flex-col h-full" style={{ minHeight: '600px' }}>
+      <iframe
+        title="Horários — Registro Diário"
+        src={src}
+        className="gdp-frame flex-1"
+        style={{ minHeight: '600px' }}
+      />
+    </div>
+  );
 }
 
 export function AppRoutes() {

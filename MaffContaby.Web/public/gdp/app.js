@@ -396,6 +396,18 @@
     const mt = monthTotals(y, m);
     const totalMesTxt = formatMinutes(mt.totalMin);
     el.resumoMes.textContent = `${mt.registros} registro(s) • Total do mês: ${totalMesTxt}`;
+    // Update topbar summary stats
+    const elTotal = document.getElementById("resumoTotal");
+    const elDias = document.getElementById("resumoDias");
+    if (elTotal) elTotal.textContent = totalMesTxt || "0h00";
+    if (elDias) {
+      let diasCount = 0;
+      const ym = `${y}-${pad2(m + 1)}`;
+      for (const key of Object.keys(store.records)) {
+        if (key.startsWith(ym) && Array.isArray(store.records[key]) && store.records[key].length > 0) diasCount++;
+      }
+      elDias.textContent = String(diasCount);
+    }
 
     const first = startOfMonth(y, m);
     const offset = mondayIndex(first);
