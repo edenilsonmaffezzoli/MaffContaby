@@ -1,3 +1,7 @@
+import type { TargetAuthInput } from './target-auth';
+
+export type { TargetAuthInput, TargetAuthMode } from './target-auth';
+
 export type SourceFileInput = {
   path: string;
   content: string;
@@ -15,6 +19,7 @@ export type GerarCasoTesteRequest = {
   sourceFiles?: SourceFileInput[];
   images?: ImageInput[];
   extraContext?: string;
+  targetAuth?: TargetAuthInput;
 };
 
 export type QaseStep = {
@@ -55,6 +60,10 @@ export type GerarCasoTesteResponse = {
     urlContentFetched?: boolean;
     urlContentTruncated?: boolean;
     urlFetchError?: string;
+    authAttempted?: boolean;
+    authSuccess?: boolean;
+    authMode?: string;
+    authError?: string;
   };
 };
 
