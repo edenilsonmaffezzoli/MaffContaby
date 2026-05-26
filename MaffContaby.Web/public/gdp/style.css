@@ -28,9 +28,10 @@
   --danger:       #d32f2f;
   --danger-light: rgba(211,47,47,0.10);
   --success:      #006666;
-  --weekend-bg:   rgba(16,24,40,0.04);
+  --weekend-bg:   rgba(16,24,40,0.10);
   --today-ring:   rgba(0,102,102,0.50);
-  --marked-bg:    rgba(0,102,102,0.06);
+  --marked-bg:    rgba(0,102,102,0.16);
+  --marked-border:rgba(0,102,102,0.32);
 
   /* Effects */
   --shadow:       0 8px 24px rgba(16,24,40,0.10), 0 2px 6px rgba(16,24,40,0.05);
@@ -60,9 +61,10 @@
   --primary-mid:  rgba(94,234,212,0.20);
   --danger:       #fb7185;
   --danger-light: rgba(251,113,133,0.12);
-  --weekend-bg:   rgba(255,255,255,0.04);
+  --weekend-bg:   rgba(0,0,0,0.22);
   --today-ring:   rgba(94,234,212,0.45);
-  --marked-bg:    rgba(94,234,212,0.08);
+  --marked-bg:    rgba(94,234,212,0.18);
+  --marked-border:rgba(94,234,212,0.36);
   --shadow:       0 8px 24px rgba(0,0,0,0.32);
   --shadow-modal: 0 20px 60px rgba(0,0,0,0.50);
   --focus:        0 0 0 3px rgba(94,234,212,0.22);
@@ -303,7 +305,13 @@ body {
 .day:nth-child(7n) { border-right: none; }
 
 .day.weekend:not(.has-records) { background: var(--weekend-bg); }
-.day.has-records { background: var(--marked-bg); }
+.day.has-records {
+  background: var(--marked-bg);
+  box-shadow: inset 3px 0 0 0 var(--marked-border);
+}
+.day.has-records.today {
+  box-shadow: inset 0 0 0 2px var(--today-ring), inset 3px 0 0 0 var(--marked-border);
+}
 
 .day.out {
   opacity: 0.45;

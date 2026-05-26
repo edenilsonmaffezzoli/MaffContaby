@@ -51,7 +51,7 @@
     btnAddFromPopover: document.getElementById("btnAddFromPopover"),
   };
 
-  const MAX_VISIBLE_ACTIVITIES = 3;
+  const MAX_VISIBLE_ACTIVITIES = 2;
   let popoverDateKey = "";
 
   const monthFmt = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" });
