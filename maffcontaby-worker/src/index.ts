@@ -75,7 +75,6 @@ type GdpStore = {
 
 interface Env {
   MAFF_KV: KVNamespace;
-  WRITE_KEY?: string;
   GDP_INIT_ADMIN_USERNAME?: string;
   GDP_INIT_ADMIN_PASSWORD?: string;
   GEMINI_API_KEY?: string;
@@ -114,20 +113,9 @@ function withCors(response: Response) {
   const headers = new Headers(response.headers);
   headers.set('access-control-allow-origin', '*');
   headers.set('access-control-allow-methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  headers.set('access-control-allow-headers', 'content-type,authorization,x-maff-key');
+  headers.set('access-control-allow-headers', 'content-type,authorization');
   headers.set('access-control-max-age', '86400');
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-
-function getWriteKeyFromRequest(request: Request) {
-  const auth = request.headers.get('authorization')?.trim();
-  if (auth?.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
-  return request.headers.get('x-maff-key')?.trim() ?? '';
-}
-
-function isWriteMethod(method: string) {
-  const m = method.toUpperCase();
-  return m === 'POST' || m === 'PUT' || m === 'DELETE';
 }
 
 function normalizeCompetencia(value: string) {
@@ -825,17 +813,10 @@ async function requireSession(request: Request, env: Env) {
   return { ok: true as const, user };
 }
 
-function assertWriteAuthorized(request: Request, env: Env) {
-  const url = new URL(request.url);
-  const expected = env.WRITE_KEY?.trim();
-  if (!expected) {
-    const isLocal = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
-    if (isLocal) return { ok: true as const };
-    return { ok: false as const, response: text('WRITE_KEY não configurada no Worker', { status: 500 }) };
-  }
-  const got = getWriteKeyFromRequest(request);
-  if (!got || got !== expected) return { ok: false as const, response: unauthorized() };
-  return { ok: true as const };
+function isPublicApiPath(path: string, method: string) {
+  if (path === '/api/auth/bootstrap') return method === 'GET' || method === 'POST';
+  if (path === '/api/auth/login' && method === 'POST') return true;
+  return false;
 }
 
 export default {
@@ -847,18 +828,13 @@ export default {
 
       if (method === 'OPTIONS') return withCors(text('', { status: 204 }));
 
-      if (
-        isWriteMethod(method) &&
-        !path.startsWith('/api/auth') &&
-        !path.startsWith('/api/gdp') &&
-        path !== '/api/gerar-caso-teste'
-      ) {
-        const auth = assertWriteAuthorized(request, env);
-        if (!auth.ok) return withCors(auth.response);
-      }
-
       if (path.startsWith('/api/auth') || path.startsWith('/api/gdp') || path === '/api/gerar-caso-teste') {
         await ensureGdpAdminInitialized(env);
+      }
+
+      if (path.startsWith('/api/') && !isPublicApiPath(path, method)) {
+        const session = await requireSession(request, env);
+        if (!session.ok) return withCors(session.response);
       }
 
       if (path === '/api/gerar-caso-teste') {

@@ -2,7 +2,7 @@ import { useHttpClient } from '@/hooks/use-http-client';
 import { logout, me } from '@/services/auth-service';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 function MenuIcon(props: { className?: string }) {
   return (
@@ -140,6 +140,10 @@ export function Layout() {
   });
 
   const user = meQuery.data?.user ?? null;
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
 
   return (
     <div className="shell">
@@ -281,6 +285,7 @@ export function Layout() {
                     }
                     localStorage.removeItem('gdp_token');
                     localStorage.removeItem('gdp_admin_user');
+                    localStorage.removeItem('maff_write_key');
                     navigate('/login', { replace: true });
                   }}
                 >
