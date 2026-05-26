@@ -1,4 +1,5 @@
-import { fetchSystemPathContent } from '../fetch-system-url';
+import { fetchAuthenticatedPage, type AuthenticatedFetchResult } from '../fetch-authenticated-url';
+import { fetchSystemPathContent, isHttpSystemPath } from '../fetch-system-url';
 import { callGeminiJson, type GeminiImagePart } from '../gemini-client';
 import { groupCasesBySubject } from '../group-cases-by-subject';
 import { parseAiQaseCsv } from '../parse-ai-qase-csv';
@@ -11,6 +12,7 @@ import type {
   QaseCase,
   SourceFileInput,
 } from '../types/gerar-caso-teste';
+import type { TargetAuthInput } from '../types/target-auth';
 
 
 export type GerarCasoTesteEnv = {
@@ -61,17 +63,28 @@ function normalizeMime(mime: string) {
   return m;
 }
 
+function redactSecretsInPrompt(prompt: string, auth?: TargetAuthInput): string {
+  let out = prompt;
+  const password = auth?.password;
+  if (password && password.length > 0) {
+    out = out.split(password).join('***');
+  }
+  return out;
+}
+
 /** Prompt textual para export/download; imagens vão separadas ao Gemini (base64). */
 function formatPromptForDownload(
   prompt: string,
   images: Array<{ mimeType: string; name?: string }>,
+  auth?: TargetAuthInput,
 ): string {
-  if (!images.length) return prompt;
+  const redacted = redactSecretsInPrompt(prompt, auth);
+  if (!images.length) return redacted;
   const lines = images.map((img, i) => {
     const label = img.name?.trim() || `imagem-${i + 1}`;
     return `- ${label} (${normalizeMime(img.mimeType)})`;
   });
-  return `${prompt}\n\n---\nImagens enviadas ao Gemini (não incluídas neste arquivo): ${images.length}\n${lines.join('\n')}`;
+  return `${redacted}\n\n---\nImagens enviadas ao Gemini (não incluídas neste arquivo): ${images.length}\n${lines.join('\n')}`;
 }
 
 function gerarCasoTesteError(
@@ -79,11 +92,12 @@ function gerarCasoTesteError(
   status: number,
   promptText: string,
   images: Array<{ mimeType: string; name?: string }>,
+  auth?: TargetAuthInput,
 ): Response {
   const body: GerarCasoTesteErrorResponse = {
     ok: false,
     error: message,
-    prompt: formatPromptForDownload(promptText, images),
+    prompt: formatPromptForDownload(promptText, images, auth),
   };
   return json(body, { status });
 }
@@ -338,17 +352,52 @@ function buildFallbackMarkdown(cases: QaseCase[]) {
     .join('\n\n---\n\n');
 }
 
+function validateTargetAuth(
+  auth: TargetAuthInput | undefined,
+  systemPath: string,
+): { ok: true } | { ok: false; message: string } {
+  if (!auth) return { ok: true };
+
+  const loginUrl = auth.loginUrl?.trim() ?? '';
+  const username = auth.username?.trim() ?? '';
+  const password = auth.password ?? '';
+  const hasAny = Boolean(loginUrl || username || password);
+
+  if (!hasAny) return { ok: true };
+
+  if (!loginUrl) return { ok: false, message: 'Informe a URL de login do sistema alvo' };
+  if (!username) return { ok: false, message: 'Informe o usuário de teste do sistema alvo' };
+  if (!password) return { ok: false, message: 'Informe a senha de teste do sistema alvo' };
+  if (!systemPath || !isHttpSystemPath(systemPath)) {
+    return {
+      ok: false,
+      message: 'Com autenticação, informe a URL após login (Path do Sistema) em formato http(s)',
+    };
+  }
+
+  return { ok: true };
+}
+
 function validateRequest(body: GerarCasoTesteRequest | null): { ok: true; body: GerarCasoTesteRequest } | { ok: false; message: string } {
   if (!body || typeof body !== 'object') {
     return { ok: false, message: 'Body JSON inválido' };
   }
 
+  const systemPath = body.systemPath?.trim() ?? '';
+  const authCheck = validateTargetAuth(body.targetAuth, systemPath);
+  if (!authCheck.ok) return authCheck;
+
   const hasCode = (body.sourceFiles?.length ?? 0) > 0;
   const hasImages = (body.images?.length ?? 0) > 0;
+  const hasTargetAuth =
+    Boolean(body.targetAuth?.loginUrl?.trim()) &&
+    Boolean(body.targetAuth?.username?.trim()) &&
+    Boolean(body.targetAuth?.password);
   const hasContext =
-    Boolean(body.systemPath?.trim()) ||
+    Boolean(systemPath) ||
     Boolean(body.sourcePathLabel?.trim()) ||
-    Boolean(body.extraContext?.trim());
+    Boolean(body.extraContext?.trim()) ||
+    hasTargetAuth;
 
   if (!hasCode && !hasImages && !hasContext) {
     return { ok: false, message: 'Informe path do sistema, código fonte, imagens ou contexto adicional' };
@@ -396,9 +445,17 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
 
   const req = validated.body;
   const systemPath = req.systemPath?.trim() ?? '';
-  const pageContext = systemPath
-    ? await fetchSystemPathContent(systemPath, URL_PAGE_MAX_CHARS)
-    : { content: '', fetched: false, truncated: false };
+  const targetAuth = req.targetAuth;
+  const useAuth =
+    Boolean(targetAuth?.loginUrl?.trim()) &&
+    Boolean(targetAuth?.username?.trim()) &&
+    Boolean(targetAuth?.password);
+
+  const pageContext = useAuth
+    ? await fetchAuthenticatedPage(systemPath, targetAuth!, URL_PAGE_MAX_CHARS)
+    : systemPath
+      ? await fetchSystemPathContent(systemPath, URL_PAGE_MAX_CHARS)
+      : { content: '', fetched: false, truncated: false };
 
   const pageChars = pageContext.content.length;
   const codeBudget = Math.max(0, maxChars - pageChars);
@@ -429,9 +486,9 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Erro ao chamar Gemini';
     if (msg.includes('Timeout') || msg.includes('timeout') || msg.includes('aborted')) {
-      return gerarCasoTesteError('Tempo esgotado ao gerar casos de teste (IA)', 504, prompt, reqImages);
+      return gerarCasoTesteError('Tempo esgotado ao gerar casos de teste (IA)', 504, prompt, reqImages, targetAuth);
     }
-    return gerarCasoTesteError(msg, 502, prompt, reqImages);
+    return gerarCasoTesteError(msg, 502, prompt, reqImages, targetAuth);
   }
 
   const rawResponse = geminiOut.text;
@@ -441,18 +498,18 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
     result = parseGeminiResult(rawResponse);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Resposta inválida da IA';
-    return gerarCasoTesteError(msg, 502, prompt, reqImages);
+    return gerarCasoTesteError(msg, 502, prompt, reqImages, targetAuth);
   }
 
   if (result.cases.length === 0) {
-    return gerarCasoTesteError('A IA não retornou casos de teste válidos', 502, prompt, reqImages);
+    return gerarCasoTesteError('A IA não retornou casos de teste válidos', 502, prompt, reqImages, targetAuth);
   }
 
   const response: GerarCasoTesteResponse = {
     ok: true,
     markdown: result.markdown,
     cases: result.cases,
-    prompt: formatPromptForDownload(prompt, reqImages),
+    prompt: formatPromptForDownload(prompt, reqImages, targetAuth),
     meta: {
       model,
       truncated: truncated || pageContext.truncated,
@@ -468,6 +525,10 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
       urlContentFetched: pageContext.fetched,
       urlContentTruncated: pageContext.truncated || undefined,
       urlFetchError: pageContext.fetchError,
+      authAttempted: useAuth ? (pageContext as AuthenticatedFetchResult).authAttempted : undefined,
+      authSuccess: useAuth ? (pageContext as AuthenticatedFetchResult).authSuccess : undefined,
+      authMode: useAuth ? (pageContext as AuthenticatedFetchResult).authMode : undefined,
+      authError: useAuth ? (pageContext as AuthenticatedFetchResult).authError : undefined,
     },
   };
 

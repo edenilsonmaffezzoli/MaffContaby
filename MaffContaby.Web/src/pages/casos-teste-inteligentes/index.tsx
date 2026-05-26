@@ -29,6 +29,9 @@ function formatGerarMeta(meta: GerarCasoTesteResponse['meta']): string {
     meta.urlContentFetched ? 'Página URL incluída no prompt' : null,
     meta.urlContentTruncated ? 'Conteúdo URL truncado' : null,
     meta.urlFetchError ? `URL: ${meta.urlFetchError}` : null,
+    meta.authAttempted ? `Autenticação: ${meta.authSuccess ? 'sucesso' : 'falha'}` : null,
+    meta.authMode ? `Modo: ${meta.authMode}` : null,
+    meta.authError ? `Autenticação: ${meta.authError}` : null,
     meta.casesAfterNormalize != null ? `Casos válidos: ${meta.casesAfterNormalize}` : null,
     meta.casesFromGemini != null && meta.casesDropped != null && meta.casesDropped > 0
       ? `Descartados na normalização: ${meta.casesDropped} (de ${meta.casesFromGemini} da IA)`
@@ -100,6 +103,10 @@ export function CasosTesteInteligentesPage() {
   const [metaInfo, setMetaInfo] = useState<string | null>(null);
   const [lastPrompt, setLastPrompt] = useState('');
   const [folderLoading, setFolderLoading] = useState(false);
+  const [targetLoginUrl, setTargetLoginUrl] = useState('');
+  const [targetUsername, setTargetUsername] = useState('');
+  const [targetPassword, setTargetPassword] = useState('');
+  const [targetAuthMode, setTargetAuthMode] = useState<'auto' | 'form' | 'json'>('auto');
 
   const gerarMutation = useMutation({
     mutationFn: async () => {
@@ -111,11 +118,25 @@ export function CasosTesteInteligentesPage() {
         })),
       );
 
+      const hasTargetAuthComplete =
+        Boolean(targetLoginUrl.trim()) && Boolean(targetUsername.trim()) && Boolean(targetPassword);
+
+      const targetAuth =
+        hasTargetAuthComplete
+          ? {
+              loginUrl: targetLoginUrl.trim(),
+              username: targetUsername.trim(),
+              password: targetPassword,
+              mode: targetAuthMode,
+            }
+          : undefined;
+
       return gerarCasoTeste(httpClient, {
         systemPath: systemPath.trim() || undefined,
         sourcePathLabel: sourcePathLabel.trim() || undefined,
         sourceFiles: sourceFiles.length ? sourceFiles : undefined,
         images: images.length ? images : undefined,
+        targetAuth,
       });
     },
     onSuccess: data => {
@@ -200,6 +221,10 @@ export function CasosTesteInteligentesPage() {
     setMetaInfo(null);
     setLastPrompt('');
     setExportSummary(null);
+    setTargetLoginUrl('');
+    setTargetUsername('');
+    setTargetPassword('');
+    setTargetAuthMode('auto');
     gerarMutation.reset();
     if (folderInputRef.current) folderInputRef.current.value = '';
   }
@@ -239,10 +264,15 @@ export function CasosTesteInteligentesPage() {
     openCasosTestePdf(markdown, 'Casos de Teste Inteligentes');
   }
 
+  const hasTargetAuthAny = Boolean(targetLoginUrl.trim() || targetUsername.trim() || targetPassword);
+  const hasTargetAuthComplete =
+    Boolean(targetLoginUrl.trim()) && Boolean(targetUsername.trim()) && Boolean(targetPassword);
+
   const canGenerate =
-    Boolean(systemPath.trim()) ||
-    sourceFiles.length > 0 ||
-    imagePreviews.length > 0;
+    (!hasTargetAuthAny || hasTargetAuthComplete) &&
+    (hasTargetAuthComplete
+      ? Boolean(systemPath.trim())
+      : Boolean(systemPath.trim()) || sourceFiles.length > 0 || imagePreviews.length > 0);
 
   const apiBase = getApiBaseUrl();
 
@@ -260,9 +290,7 @@ export function CasosTesteInteligentesPage() {
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="field" style={{ marginBottom: 14 }}>
-          <label className="label" htmlFor="systemPath">
-            Path do Sistema <span className="muted">(opcional)</span>
-          </label>
+          <label className="label" htmlFor="systemPath">Path do Sistema <span className="muted">(opcional)</span></label>
           <input
             id="systemPath"
             className="input"
@@ -271,6 +299,80 @@ export function CasosTesteInteligentesPage() {
             value={systemPath}
             onChange={e => setSystemPath(e.target.value)}
           />
+          {hasTargetAuthAny ? (
+            <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+              Para autenticação no site alvo, informe URLs completas (inclua domínio) em “Path do Sistema” e “URL de login”.
+            </div>
+          ) : null}
+        </div>
+
+        <div className="field" style={{ marginBottom: 14 }}>
+          <label className="label">Sistema com login (opcional)</label>
+          <div className="muted" style={{ marginTop: 2, fontSize: 12 }}>
+            Use homologação e usuário de teste. A senha é enviada apenas na requisição para buscar o conteúdo e não aparece no CSV.
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
+            <div>
+              <label className="label" style={{ fontSize: 13 }}>
+                URL de login
+              </label>
+              <input
+                className="input"
+                type="text"
+                placeholder="Ex.: https://app.exemplo.com/login"
+                value={targetLoginUrl}
+                onChange={e => setTargetLoginUrl(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="label" style={{ fontSize: 13 }}>
+                Modo
+              </label>
+              <select
+                className="input"
+                value={targetAuthMode}
+                onChange={e => setTargetAuthMode(e.target.value as 'auto' | 'form' | 'json')}
+              >
+                <option value="auto">Auto</option>
+                <option value="form">Formulário HTML</option>
+                <option value="json">API JSON</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label" style={{ fontSize: 13 }}>
+                Usuário
+              </label>
+              <input
+                className="input"
+                type="text"
+                placeholder="Usuário de teste"
+                value={targetUsername}
+                onChange={e => setTargetUsername(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="label" style={{ fontSize: 13 }}>
+                Senha
+              </label>
+              <input
+                className="input"
+                type="password"
+                placeholder="Senha de teste"
+                value={targetPassword}
+                onChange={e => setTargetPassword(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {hasTargetAuthAny && !hasTargetAuthComplete ? (
+            <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+              Preencha URL de login, usuário e senha para usar a autenticação no site alvo.
+            </div>
+          ) : null}
         </div>
 
         <div className="field" style={{ marginBottom: 14 }}>

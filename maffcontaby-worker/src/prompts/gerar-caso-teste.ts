@@ -5,7 +5,12 @@ import type { GerarCasoTesteRequest, SourceFileInput } from '../types/gerar-caso
 export type PageContextForPrompt = Pick<
   FetchedPageContext,
   'content' | 'fetched' | 'truncated' | 'fetchError'
->;
+> & {
+  authAttempted?: boolean;
+  authSuccess?: boolean;
+  authMode?: string;
+  authError?: string;
+};
 
 export function buildGerarCasoTestePrompt(
   request: GerarCasoTesteRequest,
@@ -17,6 +22,37 @@ export function buildGerarCasoTestePrompt(
   const systemPath = request.systemPath?.trim() || '(não informado)';
   const sourceLabel = request.sourcePathLabel?.trim() || '(não informado)';
   const extra = request.extraContext?.trim() || '';
+  const auth = request.targetAuth;
+
+  const authContextLines: string[] = [];
+  if (auth?.loginUrl?.trim()) {
+    authContextLines.push(`- URL de login do sistema alvo: ${auth.loginUrl.trim()}`);
+    authContextLines.push(`- Usuário de teste informado: ${auth.username.trim() || '(não informado)'}`);
+    if (pageContext?.authAttempted) {
+      authContextLines.push(
+        pageContext.authSuccess
+          ? `- Autenticação no site alvo: sucesso (modo ${pageContext.authMode ?? 'auto'})`
+          : `- Autenticação no site alvo: falhou${pageContext.authError ? ` (${pageContext.authError})` : ''}`,
+      );
+    }
+  }
+
+  const authInstructions = pageContext?.authSuccess
+    ? `
+ÁREA AUTENTICADA
+O conteúdo da página abaixo foi obtido após login no sistema alvo. Inclua uma Suite de Autenticação (login, logout, senha incorreta, campos obrigatórios) e Suites para os módulos internos visíveis nesse conteúdo.
+`
+    : auth?.loginUrl?.trim()
+      ? `
+AUTENTICAÇÃO
+Foi solicitado login no sistema alvo, mas o conteúdo autenticado não pôde ser carregado. Ainda assim, gere casos de teste de autenticação com base no contexto disponível (código, imagens, notas).
+`
+      : '';
+
+  const passwordRule = `
+SEGURANÇA NOS CASOS DE TESTE
+Nunca inclua senhas reais nos casos CSV. Use placeholders genéricos (ex.: usuario_valido, senha_incorreta, senha_valida).
+`;
 
   const codeBlock =
     files.length === 0
@@ -82,7 +118,8 @@ COBERTURA MÍNIMA
 - Site simples/landing: mínimo 15-25 casos
 - Sistema com funcionalidades: mínimo 3 casos por módulo principal (feliz + negativos)
 - Dê boa cobertura para fluxos críticos (login, cadastro, etc.)
-
+${passwordRule}
+${authInstructions}
 VALIDAÇÕES FINAIS
 - Garanta que cada caso tenha pelo menos 1 passo completo
 - Remova qualquer conteúdo técnico
@@ -98,6 +135,7 @@ VALIDAÇÕES FINAIS
 - Arquivos de código incluídos: ${files.length}${truncated ? ' (lista truncada por limite de tamanho)' : ''}
 - Imagens anexadas (prints/diagramas): ${imageCount}
 ${pageContext?.fetched ? `- Conteúdo da página (URL) incluído abaixo${pageContext.truncated ? ' (truncado)' : ''}` : pageContext?.fetchError ? `- Aviso: não foi possível buscar a URL (${pageContext.fetchError})` : ''}
+${authContextLines.length ? authContextLines.join('\n') : ''}
 ${extra ? `\n- Notas adicionais do usuário:\n${extra}` : ''}
 
 ${pageContext?.fetched && pageContext.content ? `## Conteúdo observado na página (referência de negócio)\n${pageContext.content}\n\n` : ''}## Código fonte (referência de negócio — não citar tecnicamente nos casos)
