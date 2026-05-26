@@ -41,7 +41,18 @@
     btnSalvar: document.getElementById("btnSalvar"),
     btnExcluir: document.getElementById("btnExcluir"),
     erroForm: document.getElementById("erroForm"),
+    dayPopover: document.getElementById("dayPopover"),
+    dayPopoverTitle: document.getElementById("dayPopoverTitle"),
+    dayPopoverSubtitle: document.getElementById("dayPopoverSubtitle"),
+    dayPopoverList: document.getElementById("dayPopoverList"),
+    dayPopoverCount: document.getElementById("dayPopoverCount"),
+    dayPopoverTotal: document.getElementById("dayPopoverTotal"),
+    btnFecharPopover: document.getElementById("btnFecharPopover"),
+    btnAddFromPopover: document.getElementById("btnAddFromPopover"),
   };
+
+  const MAX_VISIBLE_ACTIVITIES = 3;
+  let popoverDateKey = "";
 
   const monthFmt = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" });
   const dayLongFmt = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
@@ -387,6 +398,68 @@
     return { totalMin, registros };
   }
 
+  function buildActivityRow(dateKey, r) {
+    const row = el.tplAtividade.content.firstElementChild.cloneNode(true);
+    const mainBtn = row.querySelector(".activity-main");
+    const nameEl = row.querySelector(".activity-name");
+    const timeEl = row.querySelector(".activity-time");
+    const delBtn = row.querySelector(".activity-del");
+
+    nameEl.textContent = r.atividade;
+    timeEl.textContent = formatMinutes(r.totalMin || 0);
+
+    mainBtn.addEventListener("click", () => {
+      if (popoverDateKey) closeDayPopover();
+      openModal({ dateKey, record: r });
+    });
+    delBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const ok = confirm(`Excluir "${r.atividade}" (${formatMinutes(r.totalMin || 0)})?`);
+      if (!ok) return;
+      deleteRecord(dateKey, r.id);
+      saveStore(currentCacheKey);
+      render();
+      if (popoverDateKey === dateKey) {
+        const remaining = getRecordsForDay(dateKey);
+        if (remaining.length === 0) closeDayPopover();
+        else renderDayPopover(dateKey);
+      }
+    });
+
+    return row;
+  }
+
+  function openDayPopover(dateKey) {
+    popoverDateKey = dateKey;
+    lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    renderDayPopover(dateKey);
+    el.dayPopover.classList.add("open");
+    el.dayPopover.setAttribute("aria-hidden", "false");
+    setTimeout(() => el.btnFecharPopover.focus(), 0);
+  }
+
+  function closeDayPopover() {
+    popoverDateKey = "";
+    el.dayPopover.classList.remove("open");
+    el.dayPopover.setAttribute("aria-hidden", "true");
+    if (lastFocus && !el.modal.classList.contains("open")) lastFocus.focus();
+  }
+
+  function renderDayPopover(dateKey) {
+    const records = getRecordsForDay(dateKey);
+    const date = fromDateKey(dateKey);
+    const titleRaw = dayLongFmt.format(date);
+    el.dayPopoverTitle.textContent = titleRaw.charAt(0).toUpperCase() + titleRaw.slice(1);
+    el.dayPopoverSubtitle.textContent = `Todas as atividades registradas no dia`;
+    el.dayPopoverCount.textContent = String(records.length);
+    el.dayPopoverTotal.textContent = formatMinutes(dayTotalMinutes(dateKey));
+
+    el.dayPopoverList.innerHTML = "";
+    for (const r of records) {
+      el.dayPopoverList.appendChild(buildActivityRow(dateKey, r));
+    }
+  }
+
   function render() {
     const y = viewDate.getFullYear();
     const m = viewDate.getMonth();
@@ -457,27 +530,25 @@
       const listEl = document.createElement("div");
       listEl.className = "activities";
 
-      for (const r of records) {
-        const row = el.tplAtividade.content.firstElementChild.cloneNode(true);
-        const mainBtn = row.querySelector(".activity-main");
-        const nameEl = row.querySelector(".activity-name");
-        const timeEl = row.querySelector(".activity-time");
-        const delBtn = row.querySelector(".activity-del");
+      const visibleRecords = records.slice(0, MAX_VISIBLE_ACTIVITIES);
+      const hiddenCount = records.length - visibleRecords.length;
 
-        nameEl.textContent = r.atividade;
-        timeEl.textContent = formatMinutes(r.totalMin || 0);
+      for (const r of visibleRecords) {
+        listEl.appendChild(buildActivityRow(dateKey, r));
+      }
 
-        mainBtn.addEventListener("click", () => openModal({ dateKey, record: r }));
-        delBtn.addEventListener("click", (ev) => {
+      if (hiddenCount > 0) {
+        const more = document.createElement("button");
+        more.type = "button";
+        more.className = "day-overflow";
+        more.title = "Ver todas as atividades deste dia";
+        more.setAttribute("aria-label", `Ver mais ${hiddenCount} atividade(s)`);
+        more.textContent = `+ ${hiddenCount} mais`;
+        more.addEventListener("click", (ev) => {
           ev.stopPropagation();
-          const ok = confirm(`Excluir "${r.atividade}" (${formatMinutes(r.totalMin || 0)})?`);
-          if (!ok) return;
-          deleteRecord(dateKey, r.id);
-          saveStore(currentCacheKey);
-          render();
+          openDayPopover(dateKey);
         });
-
-        listEl.appendChild(row);
+        listEl.appendChild(more);
       }
 
       const totalEl = document.createElement("div");
@@ -1168,7 +1239,23 @@
   el.btnFecharModal.addEventListener("click", closeModal);
   el.btnCancelar.addEventListener("click", closeModal);
   document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape" && el.modal.classList.contains("open")) closeModal();
+    if (ev.key === "Escape") {
+      if (el.modal.classList.contains("open")) closeModal();
+      else if (el.dayPopover.classList.contains("open")) closeDayPopover();
+    }
+  });
+
+  el.dayPopover.addEventListener("click", (ev) => {
+    const t = ev.target;
+    if (!(t instanceof HTMLElement)) return;
+    if (t.dataset.closePopover === "true") closeDayPopover();
+  });
+  el.btnFecharPopover.addEventListener("click", closeDayPopover);
+  el.btnAddFromPopover.addEventListener("click", () => {
+    const dateKey = popoverDateKey;
+    if (!dateKey) return;
+    closeDayPopover();
+    openModal({ dateKey, record: null });
   });
 
   el.inicio.addEventListener("input", () => {
