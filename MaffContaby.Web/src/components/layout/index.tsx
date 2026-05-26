@@ -108,6 +108,26 @@ function ChevronDownIcon(props: { className?: string }) {
   );
 }
 
+function LogoutIcon(props: { className?: string }) {
+  return (
+    <svg className={props.className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M15 17l5-5-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M20 12H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M12 21H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function getInitials(username: string): string {
+  const trimmed = (username ?? '').trim();
+  if (!trimmed) return '?';
+  const parts = trimmed.split(/[\s._-]+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return trimmed.slice(0, 2).toUpperCase();
+}
+
 function LogoMark() {
   return (
     <svg width="22" height="22" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -140,6 +160,17 @@ export function Layout() {
   });
 
   const user = meQuery.data?.user ?? null;
+
+  const handleLogout = async () => {
+    try {
+      await logout(httpClient);
+    } catch {
+    }
+    localStorage.removeItem('gdp_token');
+    localStorage.removeItem('gdp_admin_user');
+    localStorage.removeItem('maff_write_key');
+    navigate('/login', { replace: true });
+  };
 
   if (!token) {
     return <Navigate to="/login" replace />;
@@ -273,28 +304,27 @@ export function Layout() {
           <div className="sidebar__footer">
             {user ? (
               <div className="sidebar__user">
-                <div className="sidebar__user-label">Logado:</div>
-                <div className="sidebar__user-name">{user.username}{user.admin ? ' (admin)' : ''}</div>
+                <div className="sidebar__user-avatar" aria-hidden="true">
+                  {getInitials(user.username)}
+                </div>
+                <div className="sidebar__user-info">
+                  <div className="sidebar__user-name">{user.username}</div>
+                  <div className="sidebar__user-role">
+                    {user.admin ? 'Administrador' : 'Usuário'}
+                  </div>
+                </div>
                 <button
-                  className="button button--ghost button--sm"
+                  className="sidebar__user-logout"
                   type="button"
-                  onClick={async () => {
-                    try {
-                      await logout(httpClient);
-                    } catch {
-                    }
-                    localStorage.removeItem('gdp_token');
-                    localStorage.removeItem('gdp_admin_user');
-                    localStorage.removeItem('maff_write_key');
-                    navigate('/login', { replace: true });
-                  }}
+                  title="Sair"
+                  aria-label="Sair"
+                  onClick={handleLogout}
                 >
-                  Sair
+                  <LogoutIcon className="icon-20" />
                 </button>
               </div>
             ) : null}
-            <div>© 2026 MaffContaby</div>
-            <div>Versão Web</div>
+            <div className="sidebar__copy">© 2026 MaffContaby · Versão Web</div>
           </div>
         </div>
       </aside>
