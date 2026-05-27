@@ -1,12 +1,15 @@
 # Copie para .dev.vars (não commitar) e preencha os valores.
-# Produção: wrangler secret put GEMINI_API_KEY 
+#
+# Cursor API (Dashboard → Integrations → New API Key):
+#   Local: preencha CURSOR_API_KEY abaixo
+#   Produção: wrangler secret put CURSOR_API_KEY
+#   Opcional: wrangler secret delete GEMINI_API_KEY  (se ainda existir do Gemini)
 
-
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-3.1-pro
-GEMINI_MAX_INPUT_CHARS=150000
-GEMINI_MAX_OUTPUT_TOKENS=32768
-GEMINI_TIMEOUT_SECONDS=180
+CURSOR_API_KEY=
+CURSOR_MODEL=composer-2.5
+CURSOR_TIMEOUT_SECONDS=300
+CURSOR_POLL_INTERVAL_MS=3000
+CURSOR_MAX_INPUT_CHARS=150000
 
 GDP_INIT_ADMIN_USERNAME=admin
 GDP_INIT_ADMIN_PASSWORD=Ramones@271287

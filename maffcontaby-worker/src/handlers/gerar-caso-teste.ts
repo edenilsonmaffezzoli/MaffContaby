@@ -1,11 +1,11 @@
 import { fetchAuthenticatedPage, type AuthenticatedFetchResult } from '../fetch-authenticated-url';
 import { fetchSystemPathContent, isHttpSystemPath } from '../fetch-system-url';
-import { callGeminiJson, type GeminiImagePart } from '../gemini-client';
+import { callCursorForTestCases, type CursorImagePart } from '../cursor-client';
 import { groupCasesBySubject } from '../group-cases-by-subject';
 import { parseAiQaseCsv } from '../parse-ai-qase-csv';
 import { buildGerarCasoTestePrompt } from '../prompts/gerar-caso-teste';
 import type {
-  GeminiAiResult,
+  AiParseResult,
   GerarCasoTesteErrorResponse,
   GerarCasoTesteRequest,
   GerarCasoTesteResponse,
@@ -16,20 +16,20 @@ import type { TargetAuthInput } from '../types/target-auth';
 
 
 export type GerarCasoTesteEnv = {
-  GEMINI_API_KEY?: string;
-  GEMINI_MODEL?: string;
-  GEMINI_MAX_INPUT_CHARS?: string;
-  GEMINI_MAX_OUTPUT_TOKENS?: string;
-  GEMINI_TIMEOUT_SECONDS?: string;
+  CURSOR_API_KEY?: string;
+  CURSOR_MODEL?: string;
+  CURSOR_MAX_INPUT_CHARS?: string;
+  CURSOR_TIMEOUT_SECONDS?: string;
+  CURSOR_POLL_INTERVAL_MS?: string;
 };
 
 
-const MAX_IMAGES = 8;
+const MAX_IMAGES = 5;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const DEFAULT_MAX_INPUT_CHARS = 150_000;
-const DEFAULT_MAX_OUTPUT_TOKENS = 32_768;
-const DEFAULT_MODEL = 'gemini-3.5-flash';
-const DEFAULT_TIMEOUT_SECONDS = 180;
+const DEFAULT_MODEL = 'composer-2.5';
+const DEFAULT_TIMEOUT_SECONDS = 300;
+const DEFAULT_POLL_INTERVAL_MS = 3000;
 const URL_PAGE_MAX_CHARS = 60_000;
 
 const CODE_EXT_PRIORITY = ['.tsx', '.ts', '.cs', '.jsx', '.js', '.vue', '.py', '.java', '.go'];
@@ -72,7 +72,7 @@ function redactSecretsInPrompt(prompt: string, auth?: TargetAuthInput): string {
   return out;
 }
 
-/** Prompt textual para export/download; imagens vão separadas ao Gemini (base64). */
+/** Prompt textual para export/download; imagens vão separadas ao Cursor (base64). */
 function formatPromptForDownload(
   prompt: string,
   images: Array<{ mimeType: string; name?: string }>,
@@ -84,7 +84,7 @@ function formatPromptForDownload(
     const label = img.name?.trim() || `imagem-${i + 1}`;
     return `- ${label} (${normalizeMime(img.mimeType)})`;
   });
-  return `${redacted}\n\n---\nImagens enviadas ao Gemini (não incluídas neste arquivo): ${images.length}\n${lines.join('\n')}`;
+  return `${redacted}\n\n---\nImagens enviadas ao Cursor (não incluídas neste arquivo): ${images.length}\n${lines.join('\n')}`;
 }
 
 function gerarCasoTesteError(
@@ -282,13 +282,13 @@ function extractModulos(analysis: Record<string, unknown> | undefined): string[]
   return analysis.modulos.filter((m): m is string => typeof m === 'string' && Boolean(m.trim()));
 }
 
-export type ParseGeminiResult = GeminiAiResult & {
-  casesFromGemini: number;
+export type ParseAiResult = AiParseResult & {
+  casesFromAi: number;
   casesAfterNormalize: number;
   casesDropped: number;
 };
 
-function tryParseGeminiJson(raw: string): ParseGeminiResult | null {
+function tryParseAiJson(raw: string): ParseAiResult | null {
   try {
     const parsed = JSON.parse(stripJsonFence(raw)) as Record<string, unknown>;
     let markdown = typeof parsed.markdown === 'string' ? parsed.markdown.trim() : '';
@@ -310,7 +310,7 @@ function tryParseGeminiJson(raw: string): ParseGeminiResult | null {
       cases: grouped.cases,
       suitesUsed: grouped.suitesUsed,
       groupingWarning: grouped.groupingWarning,
-      casesFromGemini: rawCount,
+      casesFromAi: rawCount,
       casesAfterNormalize: grouped.cases.length,
       casesDropped: dropped,
     };
@@ -319,7 +319,7 @@ function tryParseGeminiJson(raw: string): ParseGeminiResult | null {
   }
 }
 
-export function parseGeminiResult(raw: string): ParseGeminiResult {
+export function parseAiResult(raw: string): ParseAiResult {
   try {
     const { cases: normalized, rawCount, dropped } = parseAiQaseCsv(raw);
     const grouped = groupCasesBySubject(normalized, []);
@@ -328,14 +328,14 @@ export function parseGeminiResult(raw: string): ParseGeminiResult {
       cases: grouped.cases,
       suitesUsed: grouped.suitesUsed,
       groupingWarning: grouped.groupingWarning,
-      casesFromGemini: rawCount,
+      casesFromAi: rawCount,
       casesAfterNormalize: grouped.cases.length,
       casesDropped: dropped,
     };
   } catch {
   }
 
-  const fromJson = tryParseGeminiJson(raw);
+  const fromJson = tryParseAiJson(raw);
   if (fromJson) return fromJson;
 
   throw new Error('Resposta da IA não é CSV Qase válido nem JSON de casos');
@@ -423,15 +423,15 @@ function validateRequest(body: GerarCasoTesteRequest | null): { ok: true; body: 
 }
 
 export async function handleGerarCasoTeste(request: Request, env: GerarCasoTesteEnv): Promise<Response> {
-  const apiKey = env.GEMINI_API_KEY?.trim();
+  const apiKey = env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
-    return text('GEMINI_API_KEY não configurada no Worker', 500);
+    return text('CURSOR_API_KEY não configurada no Worker', 500);
   }
 
-  const model = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
-  const maxChars = parsePositiveInt(env.GEMINI_MAX_INPUT_CHARS, DEFAULT_MAX_INPUT_CHARS);
-  const maxOutputTokens = parsePositiveInt(env.GEMINI_MAX_OUTPUT_TOKENS, DEFAULT_MAX_OUTPUT_TOKENS);
-  const timeoutSeconds = parsePositiveInt(env.GEMINI_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS);
+  const model = env.CURSOR_MODEL?.trim() || DEFAULT_MODEL;
+  const maxChars = parsePositiveInt(env.CURSOR_MAX_INPUT_CHARS, DEFAULT_MAX_INPUT_CHARS);
+  const timeoutSeconds = parsePositiveInt(env.CURSOR_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS);
+  const pollIntervalMs = parsePositiveInt(env.CURSOR_POLL_INTERVAL_MS, DEFAULT_POLL_INTERVAL_MS);
 
   let body: GerarCasoTesteRequest | null = null;
   try {
@@ -461,7 +461,7 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
   const codeBudget = Math.max(0, maxChars - pageChars);
   const { files, truncated } = prepareSourceFiles(req.sourceFiles, codeBudget, systemPath);
 
-  const geminiImages: GeminiImagePart[] = (req.images ?? []).map(img => ({
+  const cursorImages: CursorImagePart[] = (req.images ?? []).map(img => ({
     mimeType: normalizeMime(img.mimeType),
     base64: img.base64.replace(/\s/g, ''),
   }));
@@ -470,32 +470,31 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
     req,
     files,
     truncated,
-    geminiImages.length,
+    cursorImages.length,
     pageContext,
   );
   const reqImages = req.images ?? [];
 
-  let geminiOut: Awaited<ReturnType<typeof callGeminiJson>>;
+  let cursorOut: Awaited<ReturnType<typeof callCursorForTestCases>>;
   try {
-    geminiOut = await callGeminiJson(
-      { apiKey, model, timeoutMs: timeoutSeconds * 1000, maxOutputTokens },
+    cursorOut = await callCursorForTestCases(
+      { apiKey, model, timeoutMs: timeoutSeconds * 1000, pollIntervalMs },
       prompt,
-      geminiImages,
-      { jsonMode: false },
+      cursorImages,
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Erro ao chamar Gemini';
+    const msg = err instanceof Error ? err.message : 'Erro ao chamar Cursor';
     if (msg.includes('Timeout') || msg.includes('timeout') || msg.includes('aborted')) {
-      return gerarCasoTesteError('Tempo esgotado ao gerar casos de teste (IA)', 504, prompt, reqImages, targetAuth);
+      return gerarCasoTesteError('Tempo esgotado ao gerar casos de teste (Cursor)', 504, prompt, reqImages, targetAuth);
     }
     return gerarCasoTesteError(msg, 502, prompt, reqImages, targetAuth);
   }
 
-  const rawResponse = geminiOut.text;
+  const rawResponse = cursorOut.text;
 
-  let result: ParseGeminiResult;
+  let result: ParseAiResult;
   try {
-    result = parseGeminiResult(rawResponse);
+    result = parseAiResult(rawResponse);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Resposta inválida da IA';
     return gerarCasoTesteError(msg, 502, prompt, reqImages, targetAuth);
@@ -516,12 +515,12 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
       filesIncluded: files.length,
       suitesUsed: result.suitesUsed,
       groupingWarning: result.groupingWarning,
-      casesFromGemini: result.casesFromGemini,
+      casesFromAi: result.casesFromAi,
       casesAfterNormalize: result.casesAfterNormalize,
       casesDropped: result.casesDropped,
-      rawJsonLength: rawResponse.length,
-      outputTruncated: geminiOut.outputTruncated,
-      finishReason: geminiOut.finishReason,
+      rawResponseLength: rawResponse.length,
+      outputTruncated: cursorOut.outputTruncated,
+      runStatus: cursorOut.runStatus,
       urlContentFetched: pageContext.fetched,
       urlContentTruncated: pageContext.truncated || undefined,
       urlFetchError: pageContext.fetchError,
