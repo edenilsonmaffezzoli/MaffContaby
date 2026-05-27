@@ -129,6 +129,11 @@ export function MovimentacoesPage() {
     setSelectedGroup('');
   };
 
+  const handleConcluirNovoLancamento = () => {
+    setShowNewForm(false);
+    void queryClient.invalidateQueries({ queryKey: ['entries'] });
+  };
+
   const createEntryMutation = useMutation({
     mutationFn: (input: { personId: string; competencia: string; grupo: string; valor: number; observacao?: string }) =>
       createEntry(httpClient, {
@@ -316,6 +321,11 @@ export function MovimentacoesPage() {
                     ))}
                   </div>
                 )}
+              </div>
+              <div className="mt-5 flex justify-end border-t border-gray-100 pt-4">
+                <Button variant="primary" onClick={handleConcluirNovoLancamento}>
+                  Concluir
+                </Button>
               </div>
             </Card>
           </div>
