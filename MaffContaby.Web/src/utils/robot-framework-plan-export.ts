@@ -80,7 +80,7 @@ function robotTags(testCase: QaseCase): string {
   return [...new Set(tags)].join('    ');
 }
 
-function buildRobotSketch(testCase: QaseCase, index: number, baseUrl: string): string {
+function buildRobotSketch(testCase: QaseCase, baseUrl: string): string {
   const name = robotTestName(testCase.title);
   const tags = robotTags(testCase);
   const firstAction = testCase.steps[0]?.action ?? 'Executar fluxo principal';
@@ -158,7 +158,7 @@ ${formatStepsForPlan(testCase.steps)}
 
 **Esboço Robot Framework (Browser Library):**
 
-${buildRobotSketch(testCase, index, baseUrl)}
+${buildRobotSketch(testCase, baseUrl)}
 `);
         index += 1;
       }
@@ -268,7 +268,7 @@ tests/
 \`\`\`robot
 *** Keywords ***
 Abrir Navegador
-    [Arguments]    \${headless}=${False}
+    [Arguments]    \${headless}=False
     New Browser    chromium    headless=\${headless}
     New Context    viewport={'width': 1280, 'height': 720}
     New Page       \${BASE_URL}
