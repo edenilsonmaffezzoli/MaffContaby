@@ -45,14 +45,22 @@ type GroupedByPerson = {
   groups: Grouped[];
 };
 
+function parseBrazilianCurrencyInput(value: string) {
+  const normalized = value.trim().replace(/\./g, '').replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
 export function MovimentacoesPage() {
   const httpClient = useHttpClient();
   const queryClient = useQueryClient();
+  const currentMonthCompetencia = useMemo(() => formatCompetencia(new Date()), []);
 
-  const [competencia, setCompetencia] = useState(() => formatCompetencia(new Date()));
+  const [competencia, setCompetencia] = useState(() => currentMonthCompetencia);
   const [selectedPersonId, setSelectedPersonId] = useState<string>('__all__');
   const [selectedGroup, setSelectedGroup] = useState<string>('');
   const [showNewForm, setShowNewForm] = useState(false);
+  const [sessionCreatedEntryIds, setSessionCreatedEntryIds] = useState<string[]>([]);
 
   const groupsQuery = useQuery({ queryKey: ['groups'], queryFn: () => getGroups(httpClient) });
   const peopleQuery = useQuery({ queryKey: ['people'], queryFn: () => getPeople(httpClient) });
@@ -112,6 +120,14 @@ export function MovimentacoesPage() {
 
   const total = useMemo(() => grouped.reduce((sum, g) => sum + g.total, 0), [grouped]);
   const totalLancamentos = grouped.reduce((s, g) => s + g.count, 0);
+  const canClearFilters =
+    selectedPersonId !== '__all__' || competencia !== currentMonthCompetencia || selectedGroup !== '';
+
+  const handleClearFilters = () => {
+    setSelectedPersonId('__all__');
+    setCompetencia(currentMonthCompetencia);
+    setSelectedGroup('');
+  };
 
   const createEntryMutation = useMutation({
     mutationFn: (input: { personId: string; competencia: string; grupo: string; valor: number; observacao?: string }) =>
@@ -122,9 +138,9 @@ export function MovimentacoesPage() {
         valor: input.valor,
         observacao: input.observacao ?? null,
       }),
-    onSuccess: async () => {
+    onSuccess: async createdEntry => {
       await queryClient.invalidateQueries({ queryKey: ['entries'] });
-      setShowNewForm(false);
+      setSessionCreatedEntryIds(prev => [createdEntry.id, ...prev.filter(id => id !== createdEntry.id)]);
     },
   });
 
@@ -147,6 +163,10 @@ export function MovimentacoesPage() {
 
   const isLoading = entriesQuery.isLoading;
   const hasData = grouped.length > 0;
+  const sessionEntries = useMemo(() => {
+    const ids = new Set(sessionCreatedEntryIds);
+    return (entriesQuery.data ?? []).filter(entry => ids.has(entry.id));
+  }, [entriesQuery.data, sessionCreatedEntryIds]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -156,7 +176,10 @@ export function MovimentacoesPage() {
         action={
           <Button
             variant="primary"
-            onClick={() => setShowNewForm(v => !v)}
+            onClick={() => {
+              setSessionCreatedEntryIds([]);
+              setShowNewForm(true);
+            }}
           >
             <Plus size={16} />
             Novo Lançamento
@@ -237,34 +260,66 @@ export function MovimentacoesPage() {
             <RefreshCw size={15} />
             Atualizar
           </Button>
+          <Button
+            variant="default"
+            onClick={handleClearFilters}
+            disabled={!canClearFilters}
+          >
+            Limpar
+          </Button>
         </div>
       </Card>
 
-      {/* New entry form */}
+      {/* New entry modal */}
       {showNewForm && (
-        <Card>
-          <CardHeader
-            title="Novo Lançamento"
-            action={
-              <button
-                type="button"
-                onClick={() => setShowNewForm(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-              >
-                <X size={16} />
-              </button>
-            }
-          />
-          <NovaMovimentacao
-            disabled={createEntryMutation.isPending}
-            people={peopleQuery.data ?? []}
-            isPeopleLoading={peopleQuery.isLoading}
-            groups={groupsQuery.data ?? []}
-            isGroupsLoading={groupsQuery.isLoading}
-            defaultCompetencia={competencia}
-            onCreate={data => createEntryMutation.mutate(data)}
-          />
-        </Card>
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px] p-4 md:p-8 overflow-y-auto">
+          <div className="max-w-6xl mx-auto">
+            <Card>
+              <CardHeader
+                title="Novo Lançamento"
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setShowNewForm(false)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                }
+              />
+              <NovaMovimentacao
+                disabled={createEntryMutation.isPending}
+                people={peopleQuery.data ?? []}
+                isPeopleLoading={peopleQuery.isLoading}
+                groups={groupsQuery.data ?? []}
+                isGroupsLoading={groupsQuery.isLoading}
+                defaultCompetencia={competencia}
+                onCreate={data => createEntryMutation.mutate(data)}
+              />
+              <div className="mt-5 border-t border-gray-100 pt-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <h3 className="m-0 text-sm font-semibold text-gray-800">Itens adicionados nesta abertura</h3>
+                  <Badge variant="info">{sessionEntries.length} {sessionEntries.length === 1 ? 'item' : 'itens'}</Badge>
+                </div>
+                {sessionEntries.length === 0 ? (
+                  <p className="text-sm text-gray-500 m-0">Os novos lançamentos aparecerão aqui para edição e exclusão.</p>
+                ) : (
+                  <div className="flex flex-col gap-2 max-h-[45vh] overflow-y-auto pr-1">
+                    {sessionEntries.map(entry => (
+                      <EntryRow
+                        key={entry.id}
+                        entry={entry}
+                        onDelete={() => deleteEntryMutation.mutate(entry.id)}
+                        onUpdate={data => updateEntryMutation.mutate(data)}
+                        disabled={deleteEntryMutation.isPending || updateEntryMutation.isPending}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+        </div>
       )}
 
       {/* Entries list */}
@@ -336,8 +391,9 @@ function NovaMovimentacao(props: {
   const [grupo, setGrupo] = useState('');
   const [valor, setValor] = useState('');
   const [observacao, setObservacao] = useState('');
+  const parsedValor = parseBrazilianCurrencyInput(valor);
 
-  const canSubmit = !props.disabled && personId && competencia.trim() && grupo.trim() && Number(valor) > 0;
+  const canSubmit = !props.disabled && personId && competencia.trim() && grupo.trim() && parsedValor > 0;
 
   return (
     <div className="flex flex-wrap gap-3 items-end">
@@ -422,7 +478,7 @@ function NovaMovimentacao(props: {
             personId,
             competencia: competencia.trim(),
             grupo: grupo.trim(),
-            valor: Number(valor),
+            valor: parsedValor,
             observacao: observacao.trim() ? observacao.trim() : undefined,
           });
           setValor('');
