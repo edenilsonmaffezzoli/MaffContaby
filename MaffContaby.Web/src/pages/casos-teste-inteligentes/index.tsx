@@ -14,9 +14,15 @@ import {
   formatQaseCsvExportSummary,
   type QaseCsvExportStats,
 } from '@/utils/qase-csv-export';
+import {
+  downloadRobotFrameworkPlan,
+  formatRobotPlanExportSummary,
+  type RobotPlanStats,
+} from '@/utils/robot-framework-plan-export';
 import { fileToBase64 } from '@/utils/read-source-folder';
 import { useMutation } from '@tanstack/react-query';
 import {
+  Bot,
   ChevronDown,
   Download,
   FileText,
@@ -82,6 +88,7 @@ export function CasosTesteInteligentesPage() {
 
   const httpClient = useHttpClient();
   const [exportSummary, setExportSummary] = useState<QaseCsvExportStats | null>(null);
+  const [robotPlanSummary, setRobotPlanSummary] = useState<RobotPlanStats | null>(null);
 
   const [systemPath, setSystemPath] = useState('');
   const [imagePreviews, setImagePreviews] = useState<ImagePreview[]>([]);
@@ -152,6 +159,7 @@ export function CasosTesteInteligentesPage() {
     setCases([]);
     setMetaInfo(null);
     setExportSummary(null);
+    setRobotPlanSummary(null);
     setShowTargetAuth(false);
     setTargetLoginUrl('');
     setTargetUsername('');
@@ -173,6 +181,29 @@ export function CasosTesteInteligentesPage() {
   function handleExportPdf() {
     if (!markdown.trim()) return alert('Não há conteúdo para gerar PDF.');
     openCasosTestePdf(markdown, 'Casos de Teste Inteligentes');
+  }
+
+  function handleExportRobotPlan() {
+    if (!cases.length) return alert('Não há casos estruturados para gerar o plano. Gere novamente com a IA.');
+    try {
+      const hasTargetAuthComplete =
+        Boolean(targetLoginUrl.trim()) && Boolean(targetUsername.trim()) && Boolean(targetPassword);
+      const stats = downloadRobotFrameworkPlan({
+        markdown,
+        cases,
+        systemPath: systemPath.trim() || undefined,
+        targetAuth: hasTargetAuthComplete
+          ? {
+              loginUrl: targetLoginUrl.trim(),
+              username: targetUsername.trim(),
+              mode: targetAuthMode,
+            }
+          : undefined,
+      });
+      setRobotPlanSummary(stats);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Erro ao gerar plano Robot Framework.');
+    }
   }
 
   const hasTargetAuthAny = Boolean(targetLoginUrl.trim() || targetUsername.trim() || targetPassword);
@@ -369,6 +400,10 @@ export function CasosTesteInteligentesPage() {
               <Download size={14} />
               CSV Qase
             </Button>
+            <Button variant="ghost" size="sm" onClick={handleExportRobotPlan} disabled={!cases.length}>
+              <Bot size={14} />
+              Gerar MD automatizado
+            </Button>
             <Button variant="ghost" size="sm" onClick={handleExportPdf} disabled={!markdown.trim()}>
               <FileText size={14} />
               PDF
@@ -382,6 +417,12 @@ export function CasosTesteInteligentesPage() {
           {exportSummary ? (
             <pre className="text-[12px] bg-gray-50 border border-gray-200 rounded-lg p-3 whitespace-pre-wrap mb-4 text-gray-700">
               {formatQaseCsvExportSummary(exportSummary)}
+            </pre>
+          ) : null}
+
+          {robotPlanSummary ? (
+            <pre className="text-[12px] bg-[#E8F5F5] border border-[rgba(0,102,102,0.2)] rounded-lg p-3 whitespace-pre-wrap mb-4 text-gray-700">
+              {formatRobotPlanExportSummary(robotPlanSummary)}
             </pre>
           ) : null}
 
