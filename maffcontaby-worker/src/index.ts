@@ -77,11 +77,11 @@ interface Env {
   MAFF_KV: KVNamespace;
   GDP_INIT_ADMIN_USERNAME?: string;
   GDP_INIT_ADMIN_PASSWORD?: string;
-  GEMINI_API_KEY?: string;
-  GEMINI_MODEL?: string;
-  GEMINI_MAX_INPUT_CHARS?: string;
-  GEMINI_MAX_OUTPUT_TOKENS?: string;
-  GEMINI_TIMEOUT_SECONDS?: string;
+  CURSOR_API_KEY?: string;
+  CURSOR_MODEL?: string;
+  CURSOR_MAX_INPUT_CHARS?: string;
+  CURSOR_TIMEOUT_SECONDS?: string;
+  CURSOR_POLL_INTERVAL_MS?: string;
 }
 
 const DB_KEY = 'db';

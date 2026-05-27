@@ -47,10 +47,10 @@ function formatGerarMeta(meta: GerarCasoTesteResponse['meta']): string {
     meta.authMode ? `Modo: ${meta.authMode}` : null,
     meta.authError ? `Autenticação: ${meta.authError}` : null,
     meta.casesAfterNormalize != null ? `Casos válidos: ${meta.casesAfterNormalize}` : null,
-    meta.casesFromGemini != null && meta.casesDropped != null && meta.casesDropped > 0
-      ? `Descartados: ${meta.casesDropped} (de ${meta.casesFromGemini})`
-      : meta.casesFromGemini != null
-        ? `Casos da IA: ${meta.casesFromGemini}`
+    meta.casesFromAi != null && meta.casesDropped != null && meta.casesDropped > 0
+      ? `Descartados: ${meta.casesDropped} (de ${meta.casesFromAi})`
+      : meta.casesFromAi != null
+        ? `Casos da IA: ${meta.casesFromAi}`
         : null,
     meta.suitesUsed?.length ? `Suites: ${meta.suitesUsed.join(', ')}` : null,
     meta.groupingWarning ?? null,
@@ -221,7 +221,7 @@ export function CasosTesteInteligentesPage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Casos de Teste Inteligentes"
-        subtitle="Gere casos com IA (Gemini) e exporte CSV para o Qase.io"
+        subtitle="Gere casos com IA (Cursor) e exporte CSV para o Qase.io"
       />
 
       {/* Input card */}

@@ -46,7 +46,7 @@ export type GerarCasoTesteResponse = {
   ok: true;
   markdown: string;
   cases: QaseCase[];
-  /** Texto exato enviado ao Gemini (parte textual; imagens listadas no rodapé). */
+  /** Texto exato enviado ao Cursor (parte textual; imagens listadas no rodapé). */
   prompt: string;
   meta: {
     model: string;
@@ -55,16 +55,17 @@ export type GerarCasoTesteResponse = {
     suitesUsed: string[];
     groupingWarning?: string;
     /** Casos no array bruto retornado pela IA (antes de descartar inválidos). */
-    casesFromGemini: number;
+    casesFromAi: number;
     /** Casos válidos após normalizeCases. */
     casesAfterNormalize: number;
     /** Casos descartados por título/passos inválidos. */
     casesDropped: number;
-    /** Tamanho em caracteres do JSON bruto do Gemini. */
-    rawJsonLength: number;
-    /** finishReason MAX_TOKENS ou similar — saída possivelmente cortada. */
+    /** Tamanho em caracteres da resposta bruta da IA. */
+    rawResponseLength: number;
+    /** Saída possivelmente cortada ou sem formato Qase esperado. */
     outputTruncated: boolean;
-    finishReason?: string;
+    /** Status do run Cursor (ex.: FINISHED). */
+    runStatus?: string;
     /** Página do systemPath (URL) foi buscada e injetada no prompt. */
     urlContentFetched: boolean;
     urlContentTruncated?: boolean;
@@ -79,11 +80,11 @@ export type GerarCasoTesteResponse = {
 export type GerarCasoTesteErrorResponse = {
   ok: false;
   error: string;
-  /** Presente quando o prompt foi montado antes da falha (Gemini, parse, etc.). */
+  /** Presente quando o prompt foi montado antes da falha (Cursor, parse, etc.). */
   prompt?: string;
 };
 
-export type GeminiAiResult = {
+export type AiParseResult = {
   markdown: string;
   cases: QaseCase[];
   suitesUsed: string[];

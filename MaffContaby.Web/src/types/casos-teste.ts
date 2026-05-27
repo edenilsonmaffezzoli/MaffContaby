@@ -51,12 +51,12 @@ export type GerarCasoTesteResponse = {
     filesIncluded: number;
     suitesUsed: string[];
     groupingWarning?: string;
-    casesFromGemini?: number;
+    casesFromAi?: number;
     casesAfterNormalize?: number;
     casesDropped?: number;
-    rawJsonLength?: number;
+    rawResponseLength?: number;
     outputTruncated?: boolean;
-    finishReason?: string;
+    runStatus?: string;
     urlContentFetched?: boolean;
     urlContentTruncated?: boolean;
     urlFetchError?: string;

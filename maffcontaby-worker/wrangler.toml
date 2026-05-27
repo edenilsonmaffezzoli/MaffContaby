@@ -9,4 +9,7 @@ kv_namespaces = [
 ]
 
 [vars]
-GEMINI_MODEL = "gemini-3.1-pro-preview"
+CURSOR_MODEL = "composer-2.5"
+CURSOR_TIMEOUT_SECONDS = "300"
+CURSOR_POLL_INTERVAL_MS = "3000"
+CURSOR_MAX_INPUT_CHARS = "150000"
