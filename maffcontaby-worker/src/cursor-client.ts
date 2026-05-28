@@ -4,7 +4,6 @@ export type CursorConfig = {
   apiKey: string;
   model: string;
   timeoutMs: number;
-  pollIntervalMs: number;
 };
 
 export type CursorImagePart = {
@@ -32,15 +31,13 @@ const TERMINAL_STATUSES = new Set<CursorRunStatus>(['FINISHED', 'ERROR', 'CANCEL
 
 const QASE_CSV_HEADER = 'Suite,Subsuite,Title,Description,Preconditions,Steps,Expected Result,Priority,Tags';
 
-function authHeaders(apiKey: string): HeadersInit {
+type SseEvent = { event: string; data: string };
+
+function authHeaders(apiKey: string, extra?: Record<string, string>): HeadersInit {
   return {
     Authorization: `Bearer ${apiKey}`,
-    'content-type': 'application/json',
+    ...extra,
   };
-}
-
-function sleep(ms: number) {
-  return new Promise<void>(resolve => setTimeout(resolve, ms));
 }
 
 async function parseJsonResponse(res: Response, label: string): Promise<unknown> {
@@ -70,6 +67,43 @@ export function detectOutputTruncated(text: string): boolean {
   return false;
 }
 
+function parseSseChunk(buffer: string): { events: SseEvent[]; rest: string } {
+  const normalized = buffer.replace(/\r\n/g, '\n');
+  const parts = normalized.split('\n\n');
+  const rest = parts.pop() ?? '';
+  const events: SseEvent[] = [];
+
+  for (const block of parts) {
+    if (!block.trim()) continue;
+    let event = '';
+    const dataLines: string[] = [];
+    for (const line of block.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+    }
+    if (event || dataLines.length) {
+      events.push({ event, data: dataLines.join('\n') });
+    }
+  }
+
+  return { events, rest };
+}
+
+function parseJsonData<T>(data: string): T | null {
+  if (!data.trim()) return null;
+  try {
+    return JSON.parse(data) as T;
+  } catch {
+    return null;
+  }
+}
+
+function assertTerminalStatus(status: CursorRunStatus): void {
+  if (status === 'ERROR') throw new Error('Run do Cursor terminou com erro');
+  if (status === 'CANCELLED') throw new Error('Run do Cursor foi cancelado');
+  if (status === 'EXPIRED') throw new Error('Run do Cursor expirou');
+}
+
 export async function createAgentRun(
   config: CursorConfig,
   prompt: string,
@@ -91,7 +125,7 @@ export async function createAgentRun(
 
   const res = await fetch(`${CURSOR_API_BASE}/v1/agents`, {
     method: 'POST',
-    headers: authHeaders(config.apiKey),
+    headers: { ...authHeaders(config.apiKey), 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
 
@@ -142,24 +176,128 @@ export async function deleteAgent(config: CursorConfig, agentId: string): Promis
   }
 }
 
-export async function pollRunUntilDone(
+function handleSseEvent(
+  evt: SseEvent,
+  state: {
+    lastStatus: CursorRunStatus;
+    assistantText: string;
+    finalText: string;
+    terminal: { status: CursorRunStatus; text: string } | null;
+  },
+): void {
+  if (evt.event === 'status') {
+    const payload = parseJsonData<{ status?: CursorRunStatus }>(evt.data);
+    if (payload?.status) state.lastStatus = payload.status;
+    return;
+  }
+
+  if (evt.event === 'assistant') {
+    const payload = parseJsonData<{ text?: string }>(evt.data);
+    if (payload?.text) state.assistantText += payload.text;
+    return;
+  }
+
+  if (evt.event === 'result') {
+    const payload = parseJsonData<{ status?: CursorRunStatus; text?: string }>(evt.data);
+    const status = payload?.status ?? state.lastStatus;
+    const text = (payload?.text ?? state.assistantText).trim();
+    if (TERMINAL_STATUSES.has(status)) {
+      state.terminal = { status, text };
+      state.lastStatus = status;
+    }
+    return;
+  }
+
+  if (evt.event === 'error') {
+    const payload = parseJsonData<{ message?: string }>(evt.data);
+    throw new Error(payload?.message?.trim() || 'Erro no stream do Cursor');
+  }
+}
+
+/**
+ * Aguarda o run via SSE (1 subrequest) em vez de polling repetido.
+ */
+export async function streamRunUntilDone(
   config: CursorConfig,
   agentId: string,
   runId: string,
   deadlineMs: number,
 ): Promise<{ status: CursorRunStatus; result?: string }> {
-  while (Date.now() < deadlineMs) {
-    const run = await getRun(config, agentId, runId);
-    if (TERMINAL_STATUSES.has(run.status)) {
-      return run;
-    }
-    await sleep(config.pollIntervalMs);
+  const remainingMs = Math.max(5_000, deadlineMs - Date.now());
+  const url = `${CURSOR_API_BASE}/v1/agents/${encodeURIComponent(agentId)}/runs/${encodeURIComponent(runId)}/stream`;
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: authHeaders(config.apiKey, { Accept: 'text/event-stream' }),
+    signal: AbortSignal.timeout(remainingMs),
+  });
+
+  if (res.status === 410) {
+    return getRun(config, agentId, runId);
   }
-  throw new Error('Timeout');
+
+  if (!res.ok) {
+    const raw = await res.text();
+    throw new Error(`Cursor stream HTTP ${res.status}: ${raw.slice(0, 800)}`);
+  }
+
+  const body = res.body;
+  if (!body) {
+    return getRun(config, agentId, runId);
+  }
+
+  const state = {
+    lastStatus: 'RUNNING' as CursorRunStatus,
+    assistantText: '',
+    finalText: '',
+    terminal: null as { status: CursorRunStatus; text: string } | null,
+  };
+
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (Date.now() < deadlineMs) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const parsed = parseSseChunk(buffer);
+      buffer = parsed.rest;
+      for (const evt of parsed.events) {
+        handleSseEvent(evt, state);
+        if (state.terminal) {
+          await reader.cancel().catch(() => undefined);
+          assertTerminalStatus(state.terminal.status);
+          return { status: state.terminal.status, result: state.terminal.text };
+        }
+      }
+    }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // ignore
+    }
+  }
+
+  if (state.terminal) {
+    assertTerminalStatus(state.terminal.status);
+    return { status: state.terminal.status, result: state.terminal.text };
+  }
+
+  if (TERMINAL_STATUSES.has(state.lastStatus) && state.assistantText.trim()) {
+    assertTerminalStatus(state.lastStatus);
+    return { status: state.lastStatus, result: state.assistantText.trim() };
+  }
+
+  return getRun(config, agentId, runId);
 }
 
 /**
- * Cria agente no-repo, aguarda o run e remove o agente ao final.
+ * Cria agente no-repo, aguarda o run (SSE) e remove o agente ao final.
+ * Máximo ~4 subrequests: create + stream (+ getRun fallback) + delete.
  */
 export async function callCursorForTestCases(
   config: CursorConfig,
@@ -173,17 +311,13 @@ export async function callCursorForTestCases(
     const created = await createAgentRun(config, prompt, images);
     agentId = created.agentId;
 
-    const terminal = await pollRunUntilDone(config, created.agentId, created.runId, deadlineMs);
+    const terminal = await streamRunUntilDone(config, created.agentId, created.runId, deadlineMs);
 
-    if (terminal.status === 'ERROR') {
-      throw new Error('Run do Cursor terminou com erro');
+    if (!TERMINAL_STATUSES.has(terminal.status)) {
+      throw new Error('Timeout');
     }
-    if (terminal.status === 'CANCELLED') {
-      throw new Error('Run do Cursor foi cancelado');
-    }
-    if (terminal.status === 'EXPIRED') {
-      throw new Error('Run do Cursor expirou');
-    }
+
+    assertTerminalStatus(terminal.status);
 
     const text = terminal.result?.trim() ?? '';
     if (!text) {

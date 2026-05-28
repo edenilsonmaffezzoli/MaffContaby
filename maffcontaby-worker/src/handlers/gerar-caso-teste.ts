@@ -20,7 +20,6 @@ export type GerarCasoTesteEnv = {
   CURSOR_MODEL?: string;
   CURSOR_MAX_INPUT_CHARS?: string;
   CURSOR_TIMEOUT_SECONDS?: string;
-  CURSOR_POLL_INTERVAL_MS?: string;
 };
 
 
@@ -29,7 +28,6 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const DEFAULT_MAX_INPUT_CHARS = 150_000;
 const DEFAULT_MODEL = 'composer-2.5';
 const DEFAULT_TIMEOUT_SECONDS = 300;
-const DEFAULT_POLL_INTERVAL_MS = 3000;
 const URL_PAGE_MAX_CHARS = 60_000;
 
 const CODE_EXT_PRIORITY = ['.tsx', '.ts', '.cs', '.jsx', '.js', '.vue', '.py', '.java', '.go'];
@@ -431,7 +429,6 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
   const model = env.CURSOR_MODEL?.trim() || DEFAULT_MODEL;
   const maxChars = parsePositiveInt(env.CURSOR_MAX_INPUT_CHARS, DEFAULT_MAX_INPUT_CHARS);
   const timeoutSeconds = parsePositiveInt(env.CURSOR_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS);
-  const pollIntervalMs = parsePositiveInt(env.CURSOR_POLL_INTERVAL_MS, DEFAULT_POLL_INTERVAL_MS);
 
   let body: GerarCasoTesteRequest | null = null;
   try {
@@ -478,7 +475,7 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
   let cursorOut: Awaited<ReturnType<typeof callCursorForTestCases>>;
   try {
     cursorOut = await callCursorForTestCases(
-      { apiKey, model, timeoutMs: timeoutSeconds * 1000, pollIntervalMs },
+      { apiKey, model, timeoutMs: timeoutSeconds * 1000 },
       prompt,
       cursorImages,
     );

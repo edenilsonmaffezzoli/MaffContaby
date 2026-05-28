@@ -81,7 +81,6 @@ interface Env {
   CURSOR_MODEL?: string;
   CURSOR_MAX_INPUT_CHARS?: string;
   CURSOR_TIMEOUT_SECONDS?: string;
-  CURSOR_POLL_INTERVAL_MS?: string;
 }
 
 const DB_KEY = 'db';
