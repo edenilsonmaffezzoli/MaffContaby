@@ -1,6 +1,9 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import { handleGerarCasoTeste, handleGerarCasoTesteStream } from './handlers/gerar-caso-teste';
 import { handleGerarCodigoRobotStream } from './handlers/gerar-codigo-robot';
+import robotoRegular from './fonts/Roboto-Regular.ttf';
+import robotoBold from './fonts/Roboto-Bold.ttf';
 
 /** Logo PNG 1×1 (placeholder) — substitua por export real se necessário nos relatórios PDF. */
 const MAFF_LOGO_PNG_B64 =
@@ -211,9 +214,10 @@ async function buildExecutivoPdf(db: DbSnapshot, params: ReportParams) {
     .slice(0, 12);
 
   const pdfDoc = await PDFDocument.create();
-  const fontTitle = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const fontH2 = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const fontBody = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  pdfDoc.registerFontkit(fontkit);
+  const fontTitle = await pdfDoc.embedFont(robotoBold, { subset: true });
+  const fontH2 = await pdfDoc.embedFont(robotoBold, { subset: true });
+  const fontBody = await pdfDoc.embedFont(robotoRegular, { subset: true });
   const logo = await pdfDoc.embedPng(b64Decode(MAFF_LOGO_PNG_B64));
   const headerLogoH = 28;
   const headerLogoW = (logo.width / logo.height) * headerLogoH;
@@ -346,9 +350,10 @@ async function buildDetalhadoPdf(db: DbSnapshot, params: ReportParams) {
   if (!filtered.ok) return { ok: false as const, error: filtered.error };
 
   const pdfDoc = await PDFDocument.create();
-  const fontTitle = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const fontH2 = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const fontBody = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  pdfDoc.registerFontkit(fontkit);
+  const fontTitle = await pdfDoc.embedFont(robotoBold, { subset: true });
+  const fontH2 = await pdfDoc.embedFont(robotoBold, { subset: true });
+  const fontBody = await pdfDoc.embedFont(robotoRegular, { subset: true });
   const logo = await pdfDoc.embedPng(b64Decode(MAFF_LOGO_PNG_B64));
   const headerLogoH = 26;
   const headerLogoW = (logo.width / logo.height) * headerLogoH;

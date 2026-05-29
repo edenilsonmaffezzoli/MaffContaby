@@ -8,7 +8,18 @@ kv_namespaces = [
   { binding = "MAFF_KV", id = "69be979544c543c7852fcc63a5a43603", preview_id = "69be979544c543c7852fcc63a5a43603" }
 ]
 
+# Permite importar arquivos .ttf como bytes (ArrayBuffer) para embutir fontes UTF-8 nos PDFs.
+# fallthrough = true preserva as regras padrão (ex.: **/*.bin) do wrangler.
+[[rules]]
+type = "Data"
+globs = ["**/*.ttf"]
+fallthrough = true
+
 [vars]
 CURSOR_MODEL = "composer-2.5"
-CURSOR_TIMEOUT_SECONDS = "300"
+# Cloud Agents (api.cursor.com/v1/agents) provisionam VM + loop de agente antes de
+# gerar tokens, então levam bem mais que a inferência inline da IDE. Folga ampla
+# para respostas grandes (projeto Robot). O heartbeat SSE mantém a conexão viva
+# durante toda a espera.
+CURSOR_TIMEOUT_SECONDS = "600"
 CURSOR_MAX_INPUT_CHARS = "150000"
