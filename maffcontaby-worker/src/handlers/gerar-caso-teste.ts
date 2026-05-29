@@ -1,9 +1,9 @@
 import { fetchAuthenticatedPage, type AuthenticatedFetchResult } from '../fetch-authenticated-url';
 import { fetchSystemPathContent, isHttpSystemPath } from '../fetch-system-url';
-import { callCursorForTestCases, type CursorImagePart } from '../cursor-client';
+import { callCursorForTestCases, type CursorImagePart, type CursorProgressCallback } from '../cursor-client';
 import { groupCasesBySubject } from '../group-cases-by-subject';
 import { parseAiQaseCsv } from '../parse-ai-qase-csv';
-import { buildGerarCasoTestePrompt } from '../prompts/gerar-caso-teste';
+import { buildGerarCasoTestePrompt, type PageContextForPrompt } from '../prompts/gerar-caso-teste';
 import type {
   AiParseResult,
   GerarCasoTesteErrorResponse,
@@ -71,7 +71,7 @@ function redactSecretsInPrompt(prompt: string, auth?: TargetAuthInput): string {
 }
 
 /** Prompt textual para export/download; imagens vão separadas ao Cursor (base64). */
-function formatPromptForDownload(
+export function formatPromptForDownload(
   prompt: string,
   images: Array<{ mimeType: string; name?: string }>,
   auth?: TargetAuthInput,
@@ -420,10 +420,43 @@ function validateRequest(body: GerarCasoTesteRequest | null): { ok: true; body: 
   return { ok: true, body };
 }
 
-export async function handleGerarCasoTeste(request: Request, env: GerarCasoTesteEnv): Promise<Response> {
+type PageContext = Awaited<ReturnType<typeof fetchSystemPathContent>> | AuthenticatedFetchResult;
+
+export type PreparedGeneration = {
+  config: { apiKey: string; model: string; timeoutMs: number };
+  model: string;
+  prompt: string;
+  cursorImages: CursorImagePart[];
+  reqImages: Array<{ mimeType: string; base64: string; name?: string }>;
+  targetAuth: TargetAuthInput | undefined;
+  useAuth: boolean;
+  files: SourceFileInput[];
+  truncated: boolean;
+  pageContext: PageContext;
+};
+
+type PrepareGenerationResult =
+  | { ok: true; data: PreparedGeneration }
+  | { ok: false; response: Response };
+
+/** Builder de prompt usado por prepareGeneration (default = casos de teste). */
+export type PromptBuilder = (
+  request: GerarCasoTesteRequest,
+  files: SourceFileInput[],
+  truncated: boolean,
+  imageCount: number,
+  pageContext: PageContextForPrompt,
+) => string;
+
+/** Valida o request, busca a página (com/sem login) e monta o prompt. Compartilhado pelos handlers. */
+export async function prepareGeneration(
+  request: Request,
+  env: GerarCasoTesteEnv,
+  promptBuilder: PromptBuilder = buildGerarCasoTestePrompt,
+): Promise<PrepareGenerationResult> {
   const apiKey = env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
-    return text('CURSOR_API_KEY não configurada no Worker', 500);
+    return { ok: false, response: text('CURSOR_API_KEY não configurada no Worker', 500) };
   }
 
   const model = env.CURSOR_MODEL?.trim() || DEFAULT_MODEL;
@@ -434,11 +467,11 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
   try {
     body = (await request.json()) as GerarCasoTesteRequest;
   } catch {
-    return text('Body JSON inválido', 400);
+    return { ok: false, response: text('Body JSON inválido', 400) };
   }
 
   const validated = validateRequest(body);
-  if (!validated.ok) return text(validated.message, 400);
+  if (!validated.ok) return { ok: false, response: text(validated.message, 400) };
 
   const req = validated.body;
   const systemPath = req.systemPath?.trim() ?? '';
@@ -448,7 +481,7 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
     Boolean(targetAuth?.username?.trim()) &&
     Boolean(targetAuth?.password);
 
-  const pageContext = useAuth
+  const pageContext: PageContext = useAuth
     ? await fetchAuthenticatedPage(systemPath, targetAuth!, URL_PAGE_MAX_CHARS)
     : systemPath
       ? await fetchSystemPathContent(systemPath, URL_PAGE_MAX_CHARS)
@@ -463,45 +496,29 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
     base64: img.base64.replace(/\s/g, ''),
   }));
 
-  const prompt = buildGerarCasoTestePrompt(
-    req,
-    files,
-    truncated,
-    cursorImages.length,
-    pageContext,
-  );
-  const reqImages = req.images ?? [];
+  const prompt = promptBuilder(req, files, truncated, cursorImages.length, pageContext);
 
-  let cursorOut: Awaited<ReturnType<typeof callCursorForTestCases>>;
-  try {
-    cursorOut = await callCursorForTestCases(
-      { apiKey, model, timeoutMs: timeoutSeconds * 1000 },
+  return {
+    ok: true,
+    data: {
+      config: { apiKey, model, timeoutMs: timeoutSeconds * 1000 },
+      model,
       prompt,
       cursorImages,
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Erro ao chamar Cursor';
-    if (msg.includes('Timeout') || msg.includes('timeout') || msg.includes('aborted')) {
-      return gerarCasoTesteError('Tempo esgotado ao gerar casos de teste (Cursor)', 504, prompt, reqImages, targetAuth);
-    }
-    return gerarCasoTesteError(msg, 502, prompt, reqImages, targetAuth);
-  }
+      reqImages: req.images ?? [],
+      targetAuth,
+      useAuth,
+      files,
+      truncated,
+      pageContext,
+    },
+  };
+}
 
-  const rawResponse = cursorOut.text;
-
-  let result: ParseAiResult;
-  try {
-    result = parseAiResult(rawResponse);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Resposta inválida da IA';
-    return gerarCasoTesteError(msg, 502, prompt, reqImages, targetAuth);
-  }
-
-  if (result.cases.length === 0) {
-    return gerarCasoTesteError('A IA não retornou casos de teste válidos', 502, prompt, reqImages, targetAuth);
-  }
-
-  const response: GerarCasoTesteResponse = {
+/** Monta a resposta final de sucesso a partir do texto bruto da IA. */
+function buildSuccessResponse(prep: PreparedGeneration, cursorOut: Awaited<ReturnType<typeof callCursorForTestCases>>, result: ParseAiResult): GerarCasoTesteResponse {
+  const { model, prompt, reqImages, targetAuth, useAuth, files, truncated, pageContext } = prep;
+  return {
     ok: true,
     markdown: result.markdown,
     cases: result.cases,
@@ -515,7 +532,7 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
       casesFromAi: result.casesFromAi,
       casesAfterNormalize: result.casesAfterNormalize,
       casesDropped: result.casesDropped,
-      rawResponseLength: rawResponse.length,
+      rawResponseLength: cursorOut.text.length,
       outputTruncated: cursorOut.outputTruncated,
       runStatus: cursorOut.runStatus,
       urlContentFetched: pageContext.fetched,
@@ -527,6 +544,122 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
       authError: useAuth ? (pageContext as AuthenticatedFetchResult).authError : undefined,
     },
   };
+}
 
-  return json(response);
+export async function handleGerarCasoTeste(request: Request, env: GerarCasoTesteEnv): Promise<Response> {
+  const prepared = await prepareGeneration(request, env);
+  if (!prepared.ok) return prepared.response;
+
+  const prep = prepared.data;
+  const { config, prompt, cursorImages, reqImages, targetAuth } = prep;
+
+  let cursorOut: Awaited<ReturnType<typeof callCursorForTestCases>>;
+  try {
+    cursorOut = await callCursorForTestCases(config, prompt, cursorImages);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Erro ao chamar Cursor';
+    if (msg.includes('Timeout') || msg.includes('timeout') || msg.includes('aborted')) {
+      return gerarCasoTesteError('Tempo esgotado ao gerar casos de teste (Cursor)', 504, prompt, reqImages, targetAuth);
+    }
+    return gerarCasoTesteError(msg, 502, prompt, reqImages, targetAuth);
+  }
+
+  let result: ParseAiResult;
+  try {
+    result = parseAiResult(cursorOut.text);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Resposta inválida da IA';
+    return gerarCasoTesteError(msg, 502, prompt, reqImages, targetAuth);
+  }
+
+  if (result.cases.length === 0) {
+    return gerarCasoTesteError('A IA não retornou casos de teste válidos', 502, prompt, reqImages, targetAuth);
+  }
+
+  return json(buildSuccessResponse(prep, cursorOut, result));
+}
+
+function sseEncode(event: string, data: unknown): Uint8Array {
+  const payload = typeof data === 'string' ? data : JSON.stringify(data);
+  return new TextEncoder().encode(`event: ${event}\ndata: ${payload}\n\n`);
+}
+
+/** Versão SSE: emite eventos de progresso ao cliente enquanto a IA gera os casos. */
+export async function handleGerarCasoTesteStream(request: Request, env: GerarCasoTesteEnv): Promise<Response> {
+  const prepared = await prepareGeneration(request, env);
+  if (!prepared.ok) return prepared.response;
+
+  const prep = prepared.data;
+  const { config, prompt, cursorImages, reqImages, targetAuth, pageContext } = prep;
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: string, data: unknown) => {
+        try {
+          controller.enqueue(sseEncode(event, data));
+        } catch {
+          // controller já fechado
+        }
+      };
+
+      send('progress', {
+        phase: pageContext.fetched ? 'building-prompt' : 'calling-ai',
+        urlContentFetched: pageContext.fetched,
+        urlFetchError: pageContext.fetchError,
+      });
+
+      const onProgress: CursorProgressCallback = ev => {
+        if (ev.type === 'status') send('status', { status: ev.status });
+        else send('delta', { chars: ev.chars });
+      };
+
+      send('progress', { phase: 'calling-ai' });
+
+      let cursorOut: Awaited<ReturnType<typeof callCursorForTestCases>>;
+      try {
+        cursorOut = await callCursorForTestCases(config, prompt, cursorImages, onProgress);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erro ao chamar Cursor';
+        const friendly =
+          msg.includes('Timeout') || msg.includes('timeout') || msg.includes('aborted')
+            ? 'Tempo esgotado ao gerar casos de teste (Cursor)'
+            : msg;
+        send('error', { error: friendly, prompt: formatPromptForDownload(prompt, reqImages, targetAuth) });
+        controller.close();
+        return;
+      }
+
+      send('progress', { phase: 'parsing' });
+
+      let result: ParseAiResult;
+      try {
+        result = parseAiResult(cursorOut.text);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Resposta inválida da IA';
+        send('error', { error: msg, prompt: formatPromptForDownload(prompt, reqImages, targetAuth) });
+        controller.close();
+        return;
+      }
+
+      if (result.cases.length === 0) {
+        send('error', {
+          error: 'A IA não retornou casos de teste válidos',
+          prompt: formatPromptForDownload(prompt, reqImages, targetAuth),
+        });
+        controller.close();
+        return;
+      }
+
+      send('result', buildSuccessResponse(prep, cursorOut, result));
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      connection: 'keep-alive',
+    },
+  });
 }
