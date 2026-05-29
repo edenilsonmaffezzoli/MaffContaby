@@ -1,5 +1,9 @@
 import { getApiBaseUrl } from '@/config/api-base-url';
-import type { GerarCasoTesteRequest, GerarCasoTesteResponse } from '@/types/casos-teste';
+import type {
+  GerarCasoTesteRequest,
+  GerarCasoTesteResponse,
+  GerarCodigoRobotResponse,
+} from '@/types/casos-teste';
 import type { AxiosInstance } from 'axios';
 
 export async function gerarCasoTeste(http: AxiosInstance, body: GerarCasoTesteRequest) {
@@ -98,6 +102,82 @@ export async function gerarCasoTesteStream(
       } else if (evt.event === 'error') {
         const d = data as { error?: string; prompt?: string } | null;
         handlers.onError?.(d?.error ?? 'Erro ao gerar casos de teste', d?.prompt);
+      }
+    }
+  }
+}
+
+export type GerarCodigoStreamHandlers = {
+  onProgress?: (phase: GerarStreamPhase, extra?: { urlContentFetched?: boolean; urlFetchError?: string }) => void;
+  onStatus?: (status: string) => void;
+  onDelta?: (chars: number) => void;
+  onResult?: (data: GerarCodigoRobotResponse) => void;
+  onError?: (error: string, prompt?: string) => void;
+};
+
+/**
+ * Gera um projeto de teste automatizado (Robot Framework + Browser Library)
+ * consumindo o stream SSE do worker.
+ */
+export async function gerarCodigoRobotStream(
+  body: GerarCasoTesteRequest,
+  token: string,
+  handlers: GerarCodigoStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(`${getApiBaseUrl()}/api/gerar-codigo-robot/stream`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!res.ok || !res.body) {
+    let message = `Erro ${res.status}`;
+    try {
+      const txt = await res.text();
+      if (txt.trim()) message = txt.trim();
+    } catch {
+      // mantém mensagem padrão
+    }
+    handlers.onError?.(message);
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const { events, rest } = parseSseBlocks(buffer);
+    buffer = rest;
+    for (const evt of events) {
+      let data: unknown = null;
+      try {
+        data = evt.data ? JSON.parse(evt.data) : null;
+      } catch {
+        data = null;
+      }
+      if (evt.event === 'progress') {
+        const d = data as { phase?: GerarStreamPhase; urlContentFetched?: boolean; urlFetchError?: string } | null;
+        if (d?.phase) handlers.onProgress?.(d.phase, { urlContentFetched: d.urlContentFetched, urlFetchError: d.urlFetchError });
+      } else if (evt.event === 'status') {
+        const d = data as { status?: string } | null;
+        if (d?.status) handlers.onStatus?.(d.status);
+      } else if (evt.event === 'delta') {
+        const d = data as { chars?: number } | null;
+        if (typeof d?.chars === 'number') handlers.onDelta?.(d.chars);
+      } else if (evt.event === 'result') {
+        handlers.onResult?.(data as GerarCodigoRobotResponse);
+      } else if (evt.event === 'error') {
+        const d = data as { error?: string; prompt?: string } | null;
+        handlers.onError?.(d?.error ?? 'Erro ao gerar o código automatizado', d?.prompt);
       }
     }
   }

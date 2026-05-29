@@ -318,6 +318,7 @@ export async function callCursorForTestCases(
   prompt: string,
   images: CursorImagePart[],
   onProgress?: CursorProgressCallback,
+  detectTruncated: (text: string) => boolean = detectOutputTruncated,
 ): Promise<CursorAgentResult> {
   const deadlineMs = Date.now() + config.timeoutMs;
   let agentId: string | undefined;
@@ -341,7 +342,7 @@ export async function callCursorForTestCases(
 
     return {
       text,
-      outputTruncated: detectOutputTruncated(text),
+      outputTruncated: detectTruncated(text),
       runStatus: terminal.status,
       agentId: created.agentId,
       runId: created.runId,

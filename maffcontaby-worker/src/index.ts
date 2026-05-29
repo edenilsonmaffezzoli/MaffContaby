@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { handleGerarCasoTeste, handleGerarCasoTesteStream } from './handlers/gerar-caso-teste';
+import { handleGerarCodigoRobotStream } from './handlers/gerar-codigo-robot';
 
 /** Logo PNG 1×1 (placeholder) — substitua por export real se necessário nos relatórios PDF. */
 const MAFF_LOGO_PNG_B64 =
@@ -827,7 +828,12 @@ export default {
 
       if (method === 'OPTIONS') return withCors(text('', { status: 204 }));
 
-      if (path.startsWith('/api/auth') || path.startsWith('/api/gdp') || path.startsWith('/api/gerar-caso-teste')) {
+      if (
+        path.startsWith('/api/auth') ||
+        path.startsWith('/api/gdp') ||
+        path.startsWith('/api/gerar-caso-teste') ||
+        path.startsWith('/api/gerar-codigo-robot')
+      ) {
         await ensureGdpAdminInitialized(env);
       }
 
@@ -841,6 +847,14 @@ export default {
         const session = await requireSession(request, env);
         if (!session.ok) return withCors(session.response);
         const response = await handleGerarCasoTesteStream(request, env);
+        return withCors(response);
+      }
+
+      if (path === '/api/gerar-codigo-robot/stream') {
+        if (method !== 'POST') return withCors(methodNotAllowed());
+        const session = await requireSession(request, env);
+        if (!session.ok) return withCors(session.response);
+        const response = await handleGerarCodigoRobotStream(request, env);
         return withCors(response);
       }
 

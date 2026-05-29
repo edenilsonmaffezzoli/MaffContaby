@@ -72,3 +72,30 @@ export type GerarCasoTesteErrorResponse = {
   error: string;
   prompt?: string;
 };
+
+export type RobotFile = {
+  path: string;
+  content: string;
+};
+
+export type GerarCodigoRobotResponse = {
+  ok: true;
+  summary: string;
+  files: RobotFile[];
+  prompt: string;
+  meta: {
+    model: string;
+    truncated: boolean;
+    filesGenerated: number;
+    rawResponseLength?: number;
+    outputTruncated?: boolean;
+    runStatus?: string;
+    urlContentFetched?: boolean;
+    urlContentTruncated?: boolean;
+    urlFetchError?: string;
+    authAttempted?: boolean;
+    authSuccess?: boolean;
+    authMode?: string;
+    authError?: string;
+  };
+};

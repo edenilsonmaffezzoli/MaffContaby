@@ -5,10 +5,21 @@ import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
 import { Select } from '@/components/ui/select';
 import { Spinner, StatusMessage } from '@/components/ui/spinner';
-import { gerarCasoTesteStream, type GerarStreamPhase } from '@/services/casos-teste-service';
-import type { GerarCasoTesteResponse, ImageInput, QaseCase } from '@/types/casos-teste';
+import {
+  gerarCasoTesteStream,
+  gerarCodigoRobotStream,
+  type GerarStreamPhase,
+} from '@/services/casos-teste-service';
+import type {
+  GerarCasoTesteResponse,
+  GerarCodigoRobotResponse,
+  ImageInput,
+  QaseCase,
+  RobotFile,
+} from '@/types/casos-teste';
 import { openCasosTestePdf } from '@/utils/casos-teste-pdf';
 import { downloadPromptTxt } from '@/utils/download-prompt-txt';
+import { downloadRobotProjectZip, type RobotZipStats } from '@/utils/download-robot-zip';
 import {
   downloadQaseCsv,
   formatQaseCsvExportSummary,
@@ -24,7 +35,9 @@ import {
   AlertTriangle,
   Bot,
   ChevronDown,
+  Code2,
   Download,
+  FileArchive,
   FileText,
   Image,
   Link,
@@ -39,6 +52,12 @@ import { Navigate } from 'react-router-dom';
 const MAX_IMAGES = 5;
 
 type GerarMeta = GerarCasoTesteResponse['meta'];
+
+type RobotProject = {
+  summary: string;
+  files: RobotFile[];
+  meta: GerarCodigoRobotResponse['meta'];
+};
 
 const PHASE_LABELS: Record<GerarStreamPhase, string> = {
   'building-prompt': 'Lendo o sistema e montando o prompt…',
@@ -115,15 +134,23 @@ export function CasosTesteInteligentesPage() {
   const [errorPrompt, setErrorPrompt] = useState<string | undefined>(undefined);
   const startedAtRef = useRef<number>(0);
 
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [codePhase, setCodePhase] = useState<GerarStreamPhase>('building-prompt');
+  const [codePartialChars, setCodePartialChars] = useState(0);
+  const [robotProject, setRobotProject] = useState<RobotProject | null>(null);
+  const [robotZipSummary, setRobotZipSummary] = useState<RobotZipStats | null>(null);
+  const [codeErrorMsg, setCodeErrorMsg] = useState<string | null>(null);
+  const [codeErrorPrompt, setCodeErrorPrompt] = useState<string | undefined>(undefined);
+
   useEffect(() => {
-    if (!isGenerating) return;
+    if (!isGenerating && !isGeneratingCode) return;
     startedAtRef.current = Date.now();
     setElapsedSeconds(0);
     const id = window.setInterval(() => {
       setElapsedSeconds(Math.floor((Date.now() - startedAtRef.current) / 1000));
     }, 1000);
     return () => window.clearInterval(id);
-  }, [isGenerating]);
+  }, [isGenerating, isGeneratingCode]);
 
   async function handleGenerate() {
     setErrorMsg(null);
@@ -181,6 +208,65 @@ export function CasosTesteInteligentesPage() {
     }
   }
 
+  async function handleGenerateCode() {
+    setCodeErrorMsg(null);
+    setCodeErrorPrompt(undefined);
+    setRobotProject(null);
+    setRobotZipSummary(null);
+    setCodePartialChars(0);
+    setCodePhase('building-prompt');
+    setIsGeneratingCode(true);
+
+    try {
+      const images: ImageInput[] = await Promise.all(
+        imagePreviews.map(async p => ({
+          mimeType: p.file.type || 'image/png',
+          base64: await fileToBase64(p.file),
+          name: p.file.name,
+        })),
+      );
+      const hasComplete =
+        Boolean(targetLoginUrl.trim()) && Boolean(targetUsername.trim()) && Boolean(targetPassword);
+      const targetAuth = hasComplete
+        ? { loginUrl: targetLoginUrl.trim(), username: targetUsername.trim(), password: targetPassword, mode: targetAuthMode }
+        : undefined;
+
+      await gerarCodigoRobotStream(
+        {
+          systemPath: systemPath.trim() || undefined,
+          images: images.length ? images : undefined,
+          targetAuth,
+        },
+        token,
+        {
+          onProgress: p => setCodePhase(p),
+          onDelta: chars => setCodePartialChars(chars),
+          onResult: data => {
+            setRobotProject({ summary: data.summary, files: data.files, meta: data.meta });
+          },
+          onError: (error, prompt) => {
+            setCodeErrorMsg(friendlyError(error));
+            setCodeErrorPrompt(prompt);
+          },
+        },
+      );
+    } catch (e) {
+      setCodeErrorMsg(friendlyError(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setIsGeneratingCode(false);
+    }
+  }
+
+  async function handleDownloadRobotZip() {
+    if (!robotProject?.files.length) return alert('Não há projeto gerado para baixar. Gere o código novamente.');
+    try {
+      const stats = await downloadRobotProjectZip(robotProject.files, systemPath.trim() || undefined);
+      setRobotZipSummary(stats);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Erro ao gerar o .zip do projeto.');
+    }
+  }
+
   const previewHtml = useMemo(() => {
     if (!markdown.trim()) return '';
     return marked.parse(markdown, { async: false }) as string;
@@ -226,6 +312,11 @@ export function CasosTesteInteligentesPage() {
     setErrorMsg(null);
     setErrorPrompt(undefined);
     setPartialChars(0);
+    setRobotProject(null);
+    setRobotZipSummary(null);
+    setCodeErrorMsg(null);
+    setCodeErrorPrompt(undefined);
+    setCodePartialChars(0);
   }
 
   function handleExportCsv() {
@@ -421,17 +512,29 @@ export function CasosTesteInteligentesPage() {
             )}
           </div>
 
-          <div className="flex items-center justify-between pt-2">
-            <Button
-              variant="primary"
-              size="lg"
-              loading={isGenerating}
-              disabled={!canGenerate || isGenerating}
-              onClick={handleGenerate}
-            >
-              <Sparkles size={18} />
-              {isGenerating ? 'Gerando com IA…' : 'Gerar Casos de Teste'}
-            </Button>
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="primary"
+                size="lg"
+                loading={isGenerating}
+                disabled={!canGenerate || isGenerating || isGeneratingCode}
+                onClick={handleGenerate}
+              >
+                <Sparkles size={18} />
+                {isGenerating ? 'Gerando com IA…' : 'Gerar Casos de Teste'}
+              </Button>
+              <Button
+                variant="default"
+                size="lg"
+                loading={isGeneratingCode}
+                disabled={!canGenerate || isGenerating || isGeneratingCode}
+                onClick={handleGenerateCode}
+              >
+                <Code2 size={18} />
+                {isGeneratingCode ? 'Gerando código…' : 'Gerar código auto'}
+              </Button>
+            </div>
             <p className="text-[11px] text-gray-400">API: {apiBase}</p>
           </div>
 
@@ -445,6 +548,90 @@ export function CasosTesteInteligentesPage() {
                   {phase === 'calling-ai' && partialChars > 0 ? ` · ~${partialChars.toLocaleString('pt-BR')} caracteres recebidos` : ''}
                 </span>
               </div>
+            </div>
+          ) : null}
+
+          {isGeneratingCode ? (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-[rgba(0,102,102,0.2)] bg-[#E8F5F5] mt-1">
+              <Spinner size="sm" className="text-[#006666]" />
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-sm font-medium text-[#006666]">
+                  {codePhase === 'building-prompt'
+                    ? 'Lendo o front-end e montando o prompt…'
+                    : codePhase === 'calling-ai'
+                      ? 'Gerando o projeto Robot Framework com a IA…'
+                      : 'Processando os arquivos gerados…'}
+                </span>
+                <span className="text-[11px] text-gray-500">
+                  {elapsedSeconds}s decorridos
+                  {codePhase === 'calling-ai' && codePartialChars > 0 ? ` · ~${codePartialChars.toLocaleString('pt-BR')} caracteres recebidos` : ''}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          {codeErrorMsg ? (
+            <div className="mt-1">
+              <StatusMessage type="error">{codeErrorMsg}</StatusMessage>
+              {codeErrorPrompt ? (
+                <button
+                  type="button"
+                  onClick={() => downloadPromptTxt(codeErrorPrompt)}
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 underline underline-offset-2"
+                >
+                  <Download size={13} />
+                  Baixar prompt (debug)
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {robotProject ? (
+            <div className="mt-2 p-4 rounded-lg border border-[rgba(0,102,102,0.2)] bg-[#F2FAFA]">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Bot size={16} className="text-[#006666] shrink-0" />
+                  <span className="text-sm font-semibold text-gray-800">
+                    Teste automatizado gerado (Robot Framework + Browser Library)
+                  </span>
+                </div>
+                <span className="text-[11px] text-gray-500 bg-white border border-gray-200 px-2.5 py-1 rounded-full font-medium">
+                  {robotProject.files.length} arquivo{robotProject.files.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {robotProject.summary ? (
+                <p className="text-[13px] text-gray-600 mb-3">{robotProject.summary}</p>
+              ) : null}
+
+              {robotProject.meta.outputTruncated ? (
+                <div className="mb-3">
+                  <StatusMessage type="warning">
+                    <AlertTriangle size={16} className="shrink-0" />
+                    <span>Saída possivelmente truncada — revise os arquivos gerados antes de executar.</span>
+                  </StatusMessage>
+                </div>
+              ) : null}
+
+              <ul className="mb-3 max-h-40 overflow-auto rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
+                {robotProject.files.map(f => (
+                  <li key={f.path} className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-gray-600 font-mono">
+                    <FileText size={12} className="text-gray-400 shrink-0" />
+                    <span className="truncate">{f.path}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <Button variant="primary" size="sm" onClick={handleDownloadRobotZip}>
+                <FileArchive size={14} />
+                Baixar projeto (.zip)
+              </Button>
+
+              {robotZipSummary ? (
+                <p className="text-[11px] text-gray-500 mt-2">
+                  Projeto baixado: {robotZipSummary.outputFilename} ({robotZipSummary.filesIncluded} arquivos).
+                </p>
+              ) : null}
             </div>
           ) : null}
 

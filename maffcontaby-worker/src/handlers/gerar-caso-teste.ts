@@ -3,7 +3,7 @@ import { fetchSystemPathContent, isHttpSystemPath } from '../fetch-system-url';
 import { callCursorForTestCases, type CursorImagePart, type CursorProgressCallback } from '../cursor-client';
 import { groupCasesBySubject } from '../group-cases-by-subject';
 import { parseAiQaseCsv } from '../parse-ai-qase-csv';
-import { buildGerarCasoTestePrompt } from '../prompts/gerar-caso-teste';
+import { buildGerarCasoTestePrompt, type PageContextForPrompt } from '../prompts/gerar-caso-teste';
 import type {
   AiParseResult,
   GerarCasoTesteErrorResponse,
@@ -71,7 +71,7 @@ function redactSecretsInPrompt(prompt: string, auth?: TargetAuthInput): string {
 }
 
 /** Prompt textual para export/download; imagens vão separadas ao Cursor (base64). */
-function formatPromptForDownload(
+export function formatPromptForDownload(
   prompt: string,
   images: Array<{ mimeType: string; name?: string }>,
   auth?: TargetAuthInput,
@@ -422,7 +422,7 @@ function validateRequest(body: GerarCasoTesteRequest | null): { ok: true; body: 
 
 type PageContext = Awaited<ReturnType<typeof fetchSystemPathContent>> | AuthenticatedFetchResult;
 
-type PreparedGeneration = {
+export type PreparedGeneration = {
   config: { apiKey: string; model: string; timeoutMs: number };
   model: string;
   prompt: string;
@@ -439,10 +439,20 @@ type PrepareGenerationResult =
   | { ok: true; data: PreparedGeneration }
   | { ok: false; response: Response };
 
+/** Builder de prompt usado por prepareGeneration (default = casos de teste). */
+export type PromptBuilder = (
+  request: GerarCasoTesteRequest,
+  files: SourceFileInput[],
+  truncated: boolean,
+  imageCount: number,
+  pageContext: PageContextForPrompt,
+) => string;
+
 /** Valida o request, busca a página (com/sem login) e monta o prompt. Compartilhado pelos handlers. */
-async function prepareGeneration(
+export async function prepareGeneration(
   request: Request,
   env: GerarCasoTesteEnv,
+  promptBuilder: PromptBuilder = buildGerarCasoTestePrompt,
 ): Promise<PrepareGenerationResult> {
   const apiKey = env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
@@ -486,7 +496,7 @@ async function prepareGeneration(
     base64: img.base64.replace(/\s/g, ''),
   }));
 
-  const prompt = buildGerarCasoTestePrompt(req, files, truncated, cursorImages.length, pageContext);
+  const prompt = promptBuilder(req, files, truncated, cursorImages.length, pageContext);
 
   return {
     ok: true,
