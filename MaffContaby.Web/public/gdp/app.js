@@ -18,6 +18,7 @@
     btnExportar: document.getElementById("btnExportar"),
     btnExportarExcel: document.getElementById("btnExportarExcel"),
     btnPdfMes: document.getElementById("btnPdfMes"),
+    btnPdfMesDetalhado: document.getElementById("btnPdfMesDetalhado"),
     btnNuvemBaixar: document.getElementById("btnNuvemBaixar"),
     btnNuvemEnviar: document.getElementById("btnNuvemEnviar"),
     btnNuvemConfig: document.getElementById("btnNuvemConfig"),
@@ -683,90 +684,214 @@
     return `${pad2(hh)}:${pad2(mm)}`;
   }
 
-  function generateMonthReportHtml() {
-    const logoUrl = new URL("../maffcontaby.svg", window.location.href).href;
-    const generatedAt = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
-
+  function collectMonthReportData() {
     const y = viewDate.getFullYear();
     const m = viewDate.getMonth();
     const monthTitleRaw = monthFmt.format(viewDate);
     const monthTitle = monthTitleRaw.charAt(0).toUpperCase() + monthTitleRaw.slice(1);
     const monthKey = `${y}-${pad2(m + 1)}`;
-
     const lastDay = new Date(y, m + 1, 0).getDate();
+    const weekdayFmt = new Intl.DateTimeFormat("pt-BR", { weekday: "long" });
+
+    const days = [];
+    const activityAgg = new Map();
     let monthTotalMin = 0;
-    const daySections = [];
+    let totalActivities = 0;
 
     for (let day = 1; day <= lastDay; day++) {
       const d = new Date(y, m, day);
-      const dateKey = toDateKey(d);
-      const list = getRecordsForDay(dateKey);
+      const list = getRecordsForDay(toDateKey(d));
       if (!list.length) continue;
 
       const totalDayMin = list.reduce((s, r) => s + (Number(r.totalMin) || 0), 0);
       monthTotalMin += totalDayMin;
+      totalActivities += list.length;
 
-      const rows = list
-        .map((r) => {
-          const totalMin = Number(r.totalMin) || 0;
-          return `
+      for (const r of list) {
+        const name = String(r.atividade || "—").trim() || "—";
+        const agg = activityAgg.get(name) || { totalMin: 0, count: 0 };
+        agg.totalMin += Number(r.totalMin) || 0;
+        agg.count += 1;
+        activityAgg.set(name, agg);
+      }
+
+      const weekdayRaw = weekdayFmt.format(d);
+      days.push({
+        day,
+        list,
+        totalDayMin,
+        weekday: weekdayRaw.charAt(0).toUpperCase() + weekdayRaw.slice(1),
+      });
+    }
+
+    const activities = [...activityAgg.entries()]
+      .map(([name, v]) => ({ name, totalMin: v.totalMin, count: v.count }))
+      .sort((a, b) => b.totalMin - a.totalMin || b.count - a.count);
+
+    return {
+      monthTitle,
+      monthKey,
+      days,
+      activities,
+      monthTotalMin,
+      totalActivities,
+      daysWithRecords: days.length,
+    };
+  }
+
+  function generateMonthReportHtml(detailed = false) {
+    const logoUrl = new URL("../maffcontaby.svg", window.location.href).href;
+    const generatedAt = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+
+    const data = collectMonthReportData();
+    const { monthTitle, monthKey, days, activities, monthTotalMin, totalActivities, daysWithRecords } = data;
+    const avgPerDay = daysWithRecords ? formatMinutesPrint(monthTotalMin / daysWithRecords) : "00:00";
+    const reportLabel = detailed ? "Relatório detalhado" : "Relatório resumido";
+    const docTitle = `GDP — ${monthTitle}${detailed ? " (detalhado)" : ""}`;
+
+    const kpisHtml = `
+      <section class="kpis" aria-label="Indicadores do mês">
+        <div class="kpi">
+          <div class="kpi-label">Total do mês</div>
+          <div class="kpi-value">${escapeHtml(formatMinutesPrint(monthTotalMin))}</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Dias com registro</div>
+          <div class="kpi-value">${escapeHtml(String(daysWithRecords))}</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Atividades</div>
+          <div class="kpi-value">${escapeHtml(String(totalActivities))}</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Média por dia</div>
+          <div class="kpi-value">${escapeHtml(avgPerDay)}</div>
+        </div>
+      </section>
+    `;
+
+    const maxActivityMin = activities.reduce((mx, a) => Math.max(mx, a.totalMin), 0) || 1;
+    const activityRows = activities
+      .map((a) => {
+        const pct = Math.max(2, Math.round((a.totalMin / maxActivityMin) * 100));
+        return `
+              <tr>
+                <td class="col-atividade">
+                  <div class="act-name">${escapeHtml(a.name)}</div>
+                  <div class="act-bar"><span style="width:${pct}%"></span></div>
+                </td>
+                <td class="col-num">${escapeHtml(String(a.count))}</td>
+                <td class="col-total">${escapeHtml(formatMinutesPrint(a.totalMin))}</td>
+              </tr>`;
+      })
+      .join("");
+
+    const summaryHtml = activities.length
+      ? `
+      <section class="block">
+        <h2 class="section-title">Resumo por atividade</h2>
+        <table class="table summary-table" aria-label="Resumo por atividade">
+          <thead>
             <tr>
-              <td class="col-atividade">${escapeHtml(r.atividade)}</td>
-              <td class="col-time">${escapeHtml(r.inicio)}</td>
-              <td class="col-time">${escapeHtml(r.fim)}</td>
-              <td class="col-total">${escapeHtml(formatMinutesPrint(totalMin))}</td>
+              <th>Atividade</th>
+              <th class="col-num">Registros</th>
+              <th class="col-total">Total</th>
             </tr>
-          `;
-        })
-        .join("");
+          </thead>
+          <tbody>${activityRows}</tbody>
+        </table>
+      </section>
+    `
+      : "";
 
-      daySections.push(`
+    const renderSummaryDay = (info) => {
+      const rows = info.list
+        .map((r) => `
+              <tr>
+                <td class="col-atividade">${escapeHtml(r.atividade)}</td>
+                <td class="col-time">${escapeHtml(r.inicio || "—")}</td>
+                <td class="col-time">${escapeHtml(r.fim || "—")}</td>
+                <td class="col-total">${escapeHtml(formatMinutesPrint(Number(r.totalMin) || 0))}</td>
+              </tr>`)
+        .join("");
+      return `
         <section class="day">
           <div class="day-head">
-            <div class="day-title">Dia ${escapeHtml(pad2(day))}</div>
+            <div class="day-title">Dia ${escapeHtml(pad2(info.day))}<span class="day-weekday"> · ${escapeHtml(info.weekday)}</span></div>
+            <div class="day-badge">${escapeHtml(formatMinutesPrint(info.totalDayMin))}</div>
           </div>
-          <table class="table" aria-label="Registros do dia ${escapeHtml(pad2(day))}">
+          <table class="table" aria-label="Registros do dia ${escapeHtml(pad2(info.day))}">
             <thead>
               <tr>
                 <th>Atividade</th>
-                <th>Início</th>
-                <th>Fim</th>
-                <th>Total</th>
+                <th class="col-time">Início</th>
+                <th class="col-time">Fim</th>
+                <th class="col-total">Total</th>
               </tr>
             </thead>
-            <tbody>
-              ${rows}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td class="tfoot-label" colspan="3">Total do dia</td>
-                <td class="col-total tfoot-total">${escapeHtml(formatMinutesPrint(totalDayMin))}</td>
-              </tr>
-            </tfoot>
+            <tbody>${rows}</tbody>
           </table>
         </section>
-      `);
-    }
+      `;
+    };
 
-    const emptyHtml = `
-      <div class="empty">
-        Nenhum registro encontrado para <strong>${escapeHtml(monthTitle)}</strong>.
-      </div>
-    `;
+    const renderDetailedDay = (info) => {
+      const cards = info.list
+        .map((r) => {
+          const descricao = String(r.descricao || "").trim();
+          const observacao = String(r.observacao || "").trim();
+          const blocks = [
+            descricao ? `<div class="rec-block"><div class="rec-label">Descrição</div><div class="rec-text">${escapeHtml(descricao)}</div></div>` : "",
+            observacao ? `<div class="rec-block"><div class="rec-label">Observação</div><div class="rec-text">${escapeHtml(observacao)}</div></div>` : "",
+          ].join("");
+          return `
+            <article class="rec">
+              <div class="rec-head">
+                <div class="rec-name">${escapeHtml(r.atividade)}</div>
+                <div class="rec-meta">
+                  <span class="rec-time">${escapeHtml(r.inicio || "—")} – ${escapeHtml(r.fim || "—")}</span>
+                  <span class="rec-dur">${escapeHtml(formatMinutesPrint(Number(r.totalMin) || 0))}</span>
+                </div>
+              </div>
+              ${blocks}
+            </article>`;
+        })
+        .join("");
+      return `
+        <section class="day">
+          <div class="day-head">
+            <div class="day-title">Dia ${escapeHtml(pad2(info.day))}<span class="day-weekday"> · ${escapeHtml(info.weekday)}</span></div>
+            <div class="day-badge">${escapeHtml(formatMinutesPrint(info.totalDayMin))}</div>
+          </div>
+          <div class="rec-list">${cards}</div>
+        </section>
+      `;
+    };
 
-    const content = daySections.length ? daySections.join("") : emptyHtml;
+    const daysHtml = days.length
+      ? days.map(detailed ? renderDetailedDay : renderSummaryDay).join("")
+      : `<div class="empty">Nenhum registro encontrado para <strong>${escapeHtml(monthTitle)}</strong>.</div>`;
 
-    const bg = store.theme === "light" ? "#ffffff" : "#0f131c";
-    const text = store.theme === "light" ? "#0f172a" : "rgba(255,255,255,.92)";
-    const muted = store.theme === "light" ? "rgba(15,23,42,.62)" : "rgba(255,255,255,.70)";
-    const border = store.theme === "light" ? "rgba(15,23,42,.16)" : "rgba(255,255,255,.16)";
+    const daysSectionTitle = days.length
+      ? `<h2 class="section-title">Detalhamento por dia</h2>`
+      : "";
+
+    const isLight = store.theme === "light";
+    const bg = isLight ? "#ffffff" : "#0f131c";
+    const text = isLight ? "#0f172a" : "rgba(255,255,255,.92)";
+    const muted = isLight ? "rgba(15,23,42,.60)" : "rgba(255,255,255,.68)";
+    const border = isLight ? "rgba(15,23,42,.12)" : "rgba(255,255,255,.16)";
+    const panel = isLight ? "#f8fafc" : "rgba(255,255,255,.04)";
+    const panelHead = isLight ? "#f1f5f9" : "rgba(255,255,255,.06)";
+    const accent = "#16a34a";
+    const accentSoft = isLight ? "rgba(22,163,74,.14)" : "rgba(22,163,74,.24)";
 
     return `<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GDP — ${escapeHtml(monthTitle)}</title>
+    <title>${escapeHtml(docTitle)}</title>
     <style>
       :root{ color-scheme: light dark; }
       *{ box-sizing: border-box; }
@@ -777,6 +902,7 @@
         background: ${bg};
         color: ${text};
         padding-bottom: 56px;
+        -webkit-font-smoothing: antialiased;
       }
       .wrap{ max-width: 980px; margin: 0 auto; padding: 22px 20px 28px; }
       .pdf-banner{
@@ -789,86 +915,140 @@
       }
       .pdf-logo{
         flex: 0 0 auto;
-        width: 56px;
-        height: 56px;
+        width: 52px;
+        height: 52px;
         object-fit: contain;
         border-radius: 12px;
         border: 1px solid ${border};
-        background: ${store.theme === "light" ? "#fff" : "rgba(255,255,255,.06)"};
+        background: ${isLight ? "#fff" : "rgba(255,255,255,.06)"};
       }
-      .pdf-brand-lines{
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 0;
-      }
-      .pdf-brand-name{
-        font-weight: 800;
-        font-size: 15px;
-        letter-spacing: .02em;
-        color: ${text};
-      }
-      .pdf-brand-tag{
-        font-size: 12px;
-        color: ${muted};
-      }
+      .pdf-brand-lines{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+      .pdf-brand-name{ font-weight: 800; font-size: 15px; letter-spacing: .02em; color: ${text}; }
+      .pdf-brand-tag{ font-size: 12px; color: ${muted}; }
       .head{
         display:flex;
-        align-items:flex-end;
+        align-items:flex-start;
         justify-content: space-between;
         gap: 16px;
-        padding-bottom: 14px;
-        border-bottom: 1px solid ${border};
+        padding-bottom: 16px;
+        border-bottom: 2px solid ${accent};
         margin-bottom: 18px;
       }
-      h1{ font-size: 22px; margin: 0; letter-spacing: .2px; }
-      .meta{ color: ${muted}; font-size: 12px; text-align: right; }
-      .month-total{
-        margin-top: 6px;
-        font-size: 13px;
-        color: ${muted};
-      }
-      .month-total strong{ color: ${text}; }
-      .day{ margin: 14px 0 18px; break-inside: avoid; }
-      .day-head{
-        display:flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 12px;
+      .head-left{ min-width: 0; }
+      .doc-kicker{
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: ${accent};
+        background: ${accentSoft};
+        padding: 3px 9px;
+        border-radius: 999px;
         margin-bottom: 8px;
       }
-      .day-title{ font-weight: 800; }
+      h1{ font-size: 23px; margin: 0; letter-spacing: .2px; line-height: 1.15; }
+      .head-sub{ margin-top: 4px; font-size: 13px; color: ${muted}; }
+      .meta{ color: ${muted}; font-size: 12px; text-align: right; line-height: 1.6; white-space: nowrap; }
+      .meta strong{ color: ${text}; }
+
+      .kpis{
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin: 0 0 22px;
+      }
+      .kpi{
+        background: ${panel};
+        border: 1px solid ${border};
+        border-radius: 12px;
+        padding: 12px 14px;
+        break-inside: avoid;
+      }
+      .kpi-label{ font-size: 11px; color: ${muted}; letter-spacing: .03em; text-transform: uppercase; font-weight: 600; }
+      .kpi-value{ font-size: 20px; font-weight: 800; margin-top: 4px; color: ${text}; font-variant-numeric: tabular-nums; }
+
+      .block{ margin: 0 0 24px; }
+      .section-title{
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: ${muted};
+        margin: 0 0 10px;
+      }
+
       .table{
         width: 100%;
         border-collapse: collapse;
         border: 1px solid ${border};
-        border-radius: 10px;
+        border-radius: 12px;
         overflow: hidden;
       }
+      thead th{ background: ${panelHead}; }
       th, td{
         text-align: left;
-        padding: 9px 10px;
+        padding: 9px 12px;
         border-bottom: 1px solid ${border};
         vertical-align: top;
         font-size: 13px;
       }
-      th{ font-size: 12px; color: ${muted}; letter-spacing: .2px; }
-      tr:last-child td{ border-bottom: none; }
-      .col-time, .col-total{ white-space: nowrap; }
-      .col-total{ text-align: right; font-weight: 700; }
-      tfoot td{
-        border-top: 1px solid ${border};
-        font-weight: 800;
+      th{ font-size: 11px; color: ${muted}; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; }
+      tbody tr:nth-child(even) td{ background: ${isLight ? "rgba(15,23,42,.018)" : "rgba(255,255,255,.02)"}; }
+      tbody tr:last-child td{ border-bottom: none; }
+      .col-time{ white-space: nowrap; width: 76px; }
+      .col-num{ white-space: nowrap; text-align: right; width: 90px; font-variant-numeric: tabular-nums; }
+      .col-total{ white-space: nowrap; text-align: right; width: 96px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+      .summary-table .col-atividade{ width: auto; }
+      .act-name{ font-weight: 600; }
+      .act-bar{ margin-top: 5px; height: 6px; border-radius: 999px; background: ${isLight ? "rgba(15,23,42,.08)" : "rgba(255,255,255,.10)"}; overflow: hidden; }
+      .act-bar span{ display: block; height: 100%; background: ${accent}; border-radius: 999px; }
+
+      .day{ margin: 0 0 16px; break-inside: avoid; }
+      .day-head{
+        display:flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
       }
-      .tfoot-label{
-        color: ${muted};
+      .day-title{ font-weight: 800; font-size: 14px; }
+      .day-weekday{ font-weight: 500; color: ${muted}; }
+      .day-badge{
+        font-size: 12px;
         font-weight: 700;
+        color: ${accent};
+        background: ${accentSoft};
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-variant-numeric: tabular-nums;
       }
+
+      .rec-list{ display: flex; flex-direction: column; gap: 8px; }
+      .rec{
+        border: 1px solid ${border};
+        border-left: 3px solid ${accent};
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: ${panel};
+        break-inside: avoid;
+      }
+      .rec-head{ display:flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+      .rec-name{ font-weight: 700; font-size: 13px; }
+      .rec-meta{ display:flex; align-items: baseline; gap: 12px; white-space: nowrap; }
+      .rec-time{ font-size: 12px; color: ${muted}; font-variant-numeric: tabular-nums; }
+      .rec-dur{ font-size: 12px; font-weight: 700; color: ${text}; font-variant-numeric: tabular-nums; }
+      .rec-block{ margin-top: 8px; }
+      .rec-label{ font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: ${muted}; margin-bottom: 2px; }
+      .rec-text{ font-size: 12.5px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+
       .empty{
-        padding: 14px 12px;
+        padding: 16px 14px;
         border: 1px dashed ${border};
         border-radius: 12px;
         color: ${muted};
+        text-align: center;
       }
       .doc-footer{
         margin-top: 28px;
@@ -880,22 +1060,25 @@
         line-height: 1.45;
       }
       .doc-footer strong{ color: ${text}; font-weight: 700; }
+
       @media print{
         @page{ margin: 12mm; margin-bottom: 18mm; }
-        body{
-          background: #fff !important;
-          color: #111827 !important;
-          padding-bottom: 0;
-        }
+        body{ background: #fff !important; color: #111827 !important; padding-bottom: 0; }
         .wrap{ max-width: none; padding: 0 0 14mm; }
-        .day{ break-inside: avoid; }
-        .pdf-logo{
-          border-color: #d1d5db !important;
-          background: #fff !important;
-        }
-        .pdf-brand-name, h1, .month-total strong, .tfoot-total, .doc-footer strong{ color: #111827 !important; }
-        .meta, .month-total, th, .tfoot-label, .empty, .doc-footer{ color: #4b5563 !important; }
-        .table, th, td, tfoot td, .head, .pdf-banner{ border-color: #e5e7eb !important; }
+        .day, .rec, .kpi{ break-inside: avoid; }
+        thead{ display: table-header-group; }
+        .pdf-logo{ border-color: #d1d5db !important; background: #fff !important; }
+        .pdf-brand-name, h1, .kpi-value, .rec-name, .rec-dur, .doc-footer strong, .meta strong, .act-name{ color: #111827 !important; }
+        .pdf-brand-tag, .head-sub, .meta, .section-title, .kpi-label, th, .day-weekday, .rec-time, .rec-label, .rec-text, .empty, .doc-footer, td{ color: #374151 !important; }
+        .table, th, td, .head, .pdf-banner, .kpi, .empty{ border-color: #e5e7eb !important; }
+        .rec{ border-color: #e5e7eb !important; border-left-color: #16a34a !important; }
+        .kpi, .rec, thead th{ background: #f8fafc !important; }
+        tbody tr:nth-child(even) td{ background: #fcfdfe !important; }
+        .doc-kicker, .day-badge{ background: #dcfce7 !important; color: #15803d !important; }
+        .act-bar{ background: #e5e7eb !important; }
+        .act-bar span{ background: #16a34a !important; }
+        .head{ border-bottom-color: #16a34a !important; }
+        *{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .doc-footer{
           position: fixed;
           left: 12mm;
@@ -905,8 +1088,6 @@
           padding: 8px 0 0;
           border-top: 1px solid #e5e7eb;
           background: #fff;
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
         }
       }
     </style>
@@ -914,24 +1095,29 @@
   <body>
     <div class="wrap">
       <div class="pdf-banner" aria-label="Marca">
-        <img class="pdf-logo" src="${escapeHtml(logoUrl)}" width="56" height="56" alt="MaffContaby" />
+        <img class="pdf-logo" src="${escapeHtml(logoUrl)}" width="52" height="52" alt="MaffContaby" />
         <div class="pdf-brand-lines">
           <div class="pdf-brand-name">MaffContaby</div>
           <div class="pdf-brand-tag">Gestão contábil · GDP — Registro diário de atividades</div>
         </div>
       </div>
       <header class="head">
-        <div>
+        <div class="head-left">
+          <span class="doc-kicker">${escapeHtml(reportLabel)}</span>
           <h1>GDP — ${escapeHtml(monthTitle)}</h1>
-          <div class="month-total">Total do mês: <strong>${escapeHtml(formatMinutesPrint(monthTotalMin))}</strong></div>
+          <div class="head-sub">Registro diário de atividades${detailed ? " com descrições e observações" : ""}.</div>
         </div>
         <div class="meta">
-          Mês: ${escapeHtml(monthKey)}
+          Competência: <strong>${escapeHtml(monthKey)}</strong><br />
+          Emitido em ${escapeHtml(generatedAt)}
         </div>
       </header>
-      ${content}
+      ${kpisHtml}
+      ${summaryHtml}
+      ${daysSectionTitle}
+      ${daysHtml}
       <footer class="doc-footer">
-        <strong>MaffContaby</strong> · Relatório mensal GDP · Emitido em ${escapeHtml(generatedAt)}<br />
+        <strong>MaffContaby</strong> · ${escapeHtml(reportLabel)} GDP · Emitido em ${escapeHtml(generatedAt)}<br />
         Documento gerado pelo sistema — uso interno.
       </footer>
     </div>
@@ -949,8 +1135,7 @@
 </html>`;
   }
 
-  function openMonthPdf() {
-    const html = generateMonthReportHtml();
+  function openReportWindow(html) {
     const w = window.open("", "_blank");
     if (!w) {
       alert("Não foi possível abrir a janela do PDF. Verifique se o bloqueador de pop-ups está ativo.");
@@ -960,6 +1145,14 @@
     w.document.write(html);
     w.document.close();
     w.focus();
+  }
+
+  function openMonthPdf() {
+    openReportWindow(generateMonthReportHtml(false));
+  }
+
+  function openMonthDetailedPdf() {
+    openReportWindow(generateMonthReportHtml(true));
   }
 
   function parseCsv(text) {
@@ -1230,6 +1423,7 @@
   });
   el.btnExportarExcel.addEventListener("click", exportCsvMonth);
   el.btnPdfMes.addEventListener("click", openMonthPdf);
+  el.btnPdfMesDetalhado.addEventListener("click", openMonthDetailedPdf);
 
   el.modal.addEventListener("click", (ev) => {
     const t = ev.target;
