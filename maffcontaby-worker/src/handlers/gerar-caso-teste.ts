@@ -584,6 +584,31 @@ function sseEncode(event: string, data: unknown): Uint8Array {
   return new TextEncoder().encode(`event: ${event}\ndata: ${payload}\n\n`);
 }
 
+/**
+ * Mantém o canal SSE Worker→Browser vivo enquanto aguardamos a IA.
+ *
+ * O Cursor só emite eventos quando o agente já está gerando tokens; durante o
+ * arranque/raciocínio (que pode levar minutos em respostas grandes, como o
+ * projeto Robot) nenhum byte trafega e o edge da Cloudflare/navegador derruba a
+ * conexão ociosa (~100s), resultando em "network error" ou stream sem resultado.
+ * Um comentário SSE (`: ...`) periódico é ignorado pelo parser do cliente, mas
+ * conta como tráfego e impede o timeout de ociosidade.
+ */
+export function startSseHeartbeat(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  intervalMs = 15_000,
+): () => void {
+  const encoder = new TextEncoder();
+  const id = setInterval(() => {
+    try {
+      controller.enqueue(encoder.encode(': keep-alive\n\n'));
+    } catch {
+      // controller já fechado
+    }
+  }, intervalMs);
+  return () => clearInterval(id);
+}
+
 /** Versão SSE: emite eventos de progresso ao cliente enquanto a IA gera os casos. */
 export async function handleGerarCasoTesteStream(request: Request, env: GerarCasoTesteEnv): Promise<Response> {
   const prepared = await prepareGeneration(request, env);
@@ -615,10 +640,12 @@ export async function handleGerarCasoTesteStream(request: Request, env: GerarCas
 
       send('progress', { phase: 'calling-ai' });
 
+      const stopHeartbeat = startSseHeartbeat(controller);
       let cursorOut: Awaited<ReturnType<typeof callCursorForTestCases>>;
       try {
         cursorOut = await callCursorForTestCases(config, prompt, cursorImages, onProgress);
       } catch (err) {
+        stopHeartbeat();
         const msg = err instanceof Error ? err.message : 'Erro ao chamar Cursor';
         const friendly =
           msg.includes('Timeout') || msg.includes('timeout') || msg.includes('aborted')
@@ -628,6 +655,7 @@ export async function handleGerarCasoTesteStream(request: Request, env: GerarCas
         controller.close();
         return;
       }
+      stopHeartbeat();
 
       send('progress', { phase: 'parsing' });
 

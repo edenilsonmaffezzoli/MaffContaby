@@ -4,6 +4,7 @@ import { buildGerarCodigoRobotPrompt } from '../prompts/gerar-codigo-robot';
 import {
   formatPromptForDownload,
   prepareGeneration,
+  startSseHeartbeat,
   type GerarCasoTesteEnv,
   type PreparedGeneration,
 } from './gerar-caso-teste';
@@ -172,10 +173,12 @@ export async function handleGerarCodigoRobotStream(request: Request, env: GerarC
 
       send('progress', { phase: 'calling-ai' });
 
+      const stopHeartbeat = startSseHeartbeat(controller);
       let cursorOut: Awaited<ReturnType<typeof callCursorForTestCases>>;
       try {
         cursorOut = await callCursorForTestCases(config, prompt, cursorImages, onProgress, detectRobotTruncated);
       } catch (err) {
+        stopHeartbeat();
         const msg = err instanceof Error ? err.message : 'Erro ao chamar Cursor';
         const friendly =
           msg.includes('Timeout') || msg.includes('timeout') || msg.includes('aborted')
@@ -185,6 +188,7 @@ export async function handleGerarCodigoRobotStream(request: Request, env: GerarC
         controller.close();
         return;
       }
+      stopHeartbeat();
 
       send('progress', { phase: 'parsing' });
 
