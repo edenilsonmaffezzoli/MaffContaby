@@ -67,6 +67,9 @@ const PHASE_LABELS: Record<GerarStreamPhase, string> = {
 
 function friendlyError(message: string): string {
   const m = message.trim();
+  if (/^not found$/i.test(m) || /\b404\b/.test(m)) {
+    return 'Este recurso ainda não está disponível no servidor. É necessário publicar (deploy) a versão mais recente do Worker no Cloudflare.';
+  }
   if (/rate limit/i.test(m)) {
     return 'Limite de requisições da IA atingido. Aguarde alguns instantes e tente novamente.';
   }

@@ -21,6 +21,54 @@ export type GerarStreamHandlers = {
   onError?: (error: string, prompt?: string) => void;
 };
 
+async function readErrorBody(res: Response): Promise<{ error: string; prompt?: string }> {
+  let raw = '';
+  try {
+    raw = await res.text();
+  } catch {
+    raw = '';
+  }
+  const trimmed = raw.trim();
+  if (trimmed) {
+    try {
+      const parsed = JSON.parse(trimmed) as { error?: string; prompt?: string };
+      if (parsed && typeof parsed === 'object' && typeof parsed.error === 'string') {
+        return { error: parsed.error, prompt: parsed.prompt };
+      }
+    } catch {
+      // corpo em texto puro
+    }
+    return { error: trimmed };
+  }
+  return { error: `Erro ${res.status}` };
+}
+
+/**
+ * Endpoint legado (sem streaming), ainda presente em produção.
+ * Usado como fallback quando a rota de streaming não está publicada (404).
+ */
+async function gerarCasoTesteLegacy(
+  body: GerarCasoTesteRequest,
+  token: string,
+  handlers: GerarStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  handlers.onProgress?.('calling-ai');
+  const res = await fetch(`${getApiBaseUrl()}/api/gerar-caso-teste`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok) {
+    const { error, prompt } = await readErrorBody(res);
+    handlers.onError?.(error, prompt);
+    return;
+  }
+  const data = (await res.json()) as GerarCasoTesteResponse;
+  handlers.onResult?.(data);
+}
+
 function parseSseBlocks(buffer: string): { events: Array<{ event: string; data: string }>; rest: string } {
   const normalized = buffer.replace(/\r\n/g, '\n');
   const parts = normalized.split('\n\n');
@@ -59,15 +107,15 @@ export async function gerarCasoTesteStream(
     signal,
   });
 
+  if (res.status === 404) {
+    // Worker em produção ainda sem a rota de streaming — usa o endpoint legado (sem progresso ao vivo).
+    await gerarCasoTesteLegacy(body, token, handlers, signal);
+    return;
+  }
+
   if (!res.ok || !res.body) {
-    let message = `Erro ${res.status}`;
-    try {
-      const txt = await res.text();
-      if (txt.trim()) message = txt.trim();
-    } catch {
-      // mantém mensagem padrão
-    }
-    handlers.onError?.(message);
+    const { error, prompt } = await readErrorBody(res);
+    handlers.onError?.(error, prompt);
     return;
   }
 
@@ -136,14 +184,8 @@ export async function gerarCodigoRobotStream(
   });
 
   if (!res.ok || !res.body) {
-    let message = `Erro ${res.status}`;
-    try {
-      const txt = await res.text();
-      if (txt.trim()) message = txt.trim();
-    } catch {
-      // mantém mensagem padrão
-    }
-    handlers.onError?.(message);
+    const { error, prompt } = await readErrorBody(res);
+    handlers.onError?.(error, prompt);
     return;
   }
 
