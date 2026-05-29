@@ -33,6 +33,12 @@ const QASE_CSV_HEADER = 'Suite,Subsuite,Title,Description,Preconditions,Steps,Ex
 
 type SseEvent = { event: string; data: string };
 
+export type CursorProgressEvent =
+  | { type: 'status'; status: CursorRunStatus }
+  | { type: 'delta'; chars: number };
+
+export type CursorProgressCallback = (event: CursorProgressEvent) => void;
+
 function authHeaders(apiKey: string, extra?: Record<string, string>): HeadersInit {
   return {
     Authorization: `Bearer ${apiKey}`,
@@ -184,16 +190,23 @@ function handleSseEvent(
     finalText: string;
     terminal: { status: CursorRunStatus; text: string } | null;
   },
+  onProgress?: CursorProgressCallback,
 ): void {
   if (evt.event === 'status') {
     const payload = parseJsonData<{ status?: CursorRunStatus }>(evt.data);
-    if (payload?.status) state.lastStatus = payload.status;
+    if (payload?.status) {
+      state.lastStatus = payload.status;
+      onProgress?.({ type: 'status', status: payload.status });
+    }
     return;
   }
 
   if (evt.event === 'assistant') {
     const payload = parseJsonData<{ text?: string }>(evt.data);
-    if (payload?.text) state.assistantText += payload.text;
+    if (payload?.text) {
+      state.assistantText += payload.text;
+      onProgress?.({ type: 'delta', chars: state.assistantText.length });
+    }
     return;
   }
 
@@ -222,6 +235,7 @@ export async function streamRunUntilDone(
   agentId: string,
   runId: string,
   deadlineMs: number,
+  onProgress?: CursorProgressCallback,
 ): Promise<{ status: CursorRunStatus; result?: string }> {
   const remainingMs = Math.max(5_000, deadlineMs - Date.now());
   const url = `${CURSOR_API_BASE}/v1/agents/${encodeURIComponent(agentId)}/runs/${encodeURIComponent(runId)}/stream`;
@@ -266,7 +280,7 @@ export async function streamRunUntilDone(
       const parsed = parseSseChunk(buffer);
       buffer = parsed.rest;
       for (const evt of parsed.events) {
-        handleSseEvent(evt, state);
+        handleSseEvent(evt, state, onProgress);
         if (state.terminal) {
           await reader.cancel().catch(() => undefined);
           assertTerminalStatus(state.terminal.status);
@@ -303,6 +317,7 @@ export async function callCursorForTestCases(
   config: CursorConfig,
   prompt: string,
   images: CursorImagePart[],
+  onProgress?: CursorProgressCallback,
 ): Promise<CursorAgentResult> {
   const deadlineMs = Date.now() + config.timeoutMs;
   let agentId: string | undefined;
@@ -311,7 +326,7 @@ export async function callCursorForTestCases(
     const created = await createAgentRun(config, prompt, images);
     agentId = created.agentId;
 
-    const terminal = await streamRunUntilDone(config, created.agentId, created.runId, deadlineMs);
+    const terminal = await streamRunUntilDone(config, created.agentId, created.runId, deadlineMs, onProgress);
 
     if (!TERMINAL_STATUSES.has(terminal.status)) {
       throw new Error('Timeout');

@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { handleGerarCasoTeste } from './handlers/gerar-caso-teste';
+import { handleGerarCasoTeste, handleGerarCasoTesteStream } from './handlers/gerar-caso-teste';
 
 /** Logo PNG 1×1 (placeholder) — substitua por export real se necessário nos relatórios PDF. */
 const MAFF_LOGO_PNG_B64 =
@@ -827,13 +827,21 @@ export default {
 
       if (method === 'OPTIONS') return withCors(text('', { status: 204 }));
 
-      if (path.startsWith('/api/auth') || path.startsWith('/api/gdp') || path === '/api/gerar-caso-teste') {
+      if (path.startsWith('/api/auth') || path.startsWith('/api/gdp') || path.startsWith('/api/gerar-caso-teste')) {
         await ensureGdpAdminInitialized(env);
       }
 
       if (path.startsWith('/api/') && !isPublicApiPath(path, method)) {
         const session = await requireSession(request, env);
         if (!session.ok) return withCors(session.response);
+      }
+
+      if (path === '/api/gerar-caso-teste/stream') {
+        if (method !== 'POST') return withCors(methodNotAllowed());
+        const session = await requireSession(request, env);
+        if (!session.ok) return withCors(session.response);
+        const response = await handleGerarCasoTesteStream(request, env);
+        return withCors(response);
       }
 
       if (path === '/api/gerar-caso-teste') {

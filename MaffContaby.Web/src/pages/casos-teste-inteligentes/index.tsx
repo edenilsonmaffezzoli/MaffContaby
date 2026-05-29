@@ -4,11 +4,11 @@ import { Card, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
 import { Select } from '@/components/ui/select';
-import { StatusMessage } from '@/components/ui/spinner';
-import { useHttpClient } from '@/hooks/use-http-client';
-import { gerarCasoTeste } from '@/services/casos-teste-service';
+import { Spinner, StatusMessage } from '@/components/ui/spinner';
+import { gerarCasoTesteStream, type GerarStreamPhase } from '@/services/casos-teste-service';
 import type { GerarCasoTesteResponse, ImageInput, QaseCase } from '@/types/casos-teste';
 import { openCasosTestePdf } from '@/utils/casos-teste-pdf';
+import { downloadPromptTxt } from '@/utils/download-prompt-txt';
 import {
   downloadQaseCsv,
   formatQaseCsvExportSummary,
@@ -20,8 +20,8 @@ import {
   type RobotPlanStats,
 } from '@/utils/robot-framework-plan-export';
 import { fileToBase64 } from '@/utils/read-source-folder';
-import { useMutation } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   Bot,
   ChevronDown,
   Download,
@@ -33,8 +33,32 @@ import {
   X,
 } from 'lucide-react';
 import { marked } from 'marked';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+
+const MAX_IMAGES = 5;
+
+type GerarMeta = GerarCasoTesteResponse['meta'];
+
+const PHASE_LABELS: Record<GerarStreamPhase, string> = {
+  'building-prompt': 'Lendo o sistema e montando o prompt…',
+  'calling-ai': 'Gerando casos com a IA…',
+  parsing: 'Processando os casos gerados…',
+};
+
+function friendlyError(message: string): string {
+  const m = message.trim();
+  if (/rate limit/i.test(m)) {
+    return 'Limite de requisições da IA atingido. Aguarde alguns instantes e tente novamente.';
+  }
+  if (/timeout|tempo esgotado|aborted|demorou/i.test(m)) {
+    return 'A geração demorou demais e foi interrompida. Tente novamente, reduzindo o conteúdo ou as imagens.';
+  }
+  if (/CURSOR_API_KEY|inválida ou sem permissão/i.test(m)) {
+    return 'A chave da API de IA é inválida ou não tem permissão. Verifique a configuração do Worker.';
+  }
+  return m || 'Erro desconhecido ao gerar casos de teste.';
+}
 
 function formatGerarMeta(meta: GerarCasoTesteResponse['meta']): string {
   const parts = [
@@ -58,24 +82,6 @@ function formatGerarMeta(meta: GerarCasoTesteResponse['meta']): string {
   return parts.join(' · ');
 }
 
-function formatHttpError(error: unknown) {
-  const e = error as {
-    message?: string;
-    response?: { status?: number; statusText?: string; data?: unknown };
-  };
-  const status = e?.response?.status;
-  const data = e?.response?.data;
-  if (data && typeof data === 'object' && data !== null && 'error' in data) {
-    const errMsg = (data as { error?: string }).error;
-    if (errMsg?.trim()) return status ? `${status} — ${errMsg}` : errMsg;
-  }
-  if (typeof data === 'string' && data.trim()) {
-    return status ? `${status} — ${data.trim()}` : data.trim();
-  }
-  if (status) return String(status);
-  return e?.message?.trim() || 'Erro desconhecido';
-}
-
 type ImagePreview = {
   id: string;
   file: File;
@@ -86,7 +92,6 @@ export function CasosTesteInteligentesPage() {
   const token = localStorage.getItem('gdp_token')?.trim() ?? '';
   if (!token) return <Navigate to="/login" replace />;
 
-  const httpClient = useHttpClient();
   const [exportSummary, setExportSummary] = useState<QaseCsvExportStats | null>(null);
   const [robotPlanSummary, setRobotPlanSummary] = useState<RobotPlanStats | null>(null);
 
@@ -95,14 +100,45 @@ export function CasosTesteInteligentesPage() {
   const [markdown, setMarkdown] = useState('');
   const [cases, setCases] = useState<QaseCase[]>([]);
   const [metaInfo, setMetaInfo] = useState<string | null>(null);
+  const [resultMeta, setResultMeta] = useState<GerarMeta | null>(null);
   const [showTargetAuth, setShowTargetAuth] = useState(false);
   const [targetLoginUrl, setTargetLoginUrl] = useState('');
   const [targetUsername, setTargetUsername] = useState('');
   const [targetPassword, setTargetPassword] = useState('');
   const [targetAuthMode, setTargetAuthMode] = useState<'auto' | 'form' | 'json'>('auto');
 
-  const gerarMutation = useMutation({
-    mutationFn: async () => {
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [phase, setPhase] = useState<GerarStreamPhase>('building-prompt');
+  const [partialChars, setPartialChars] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorPrompt, setErrorPrompt] = useState<string | undefined>(undefined);
+  const startedAtRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!isGenerating) return;
+    startedAtRef.current = Date.now();
+    setElapsedSeconds(0);
+    const id = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAtRef.current) / 1000));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [isGenerating]);
+
+  async function handleGenerate() {
+    setErrorMsg(null);
+    setErrorPrompt(undefined);
+    setMarkdown('');
+    setCases([]);
+    setMetaInfo(null);
+    setResultMeta(null);
+    setExportSummary(null);
+    setRobotPlanSummary(null);
+    setPartialChars(0);
+    setPhase('building-prompt');
+    setIsGenerating(true);
+
+    try {
       const images: ImageInput[] = await Promise.all(
         imagePreviews.map(async p => ({
           mimeType: p.file.type || 'image/png',
@@ -110,28 +146,49 @@ export function CasosTesteInteligentesPage() {
           name: p.file.name,
         })),
       );
-      const hasTargetAuthComplete =
+      const hasComplete =
         Boolean(targetLoginUrl.trim()) && Boolean(targetUsername.trim()) && Boolean(targetPassword);
-      const targetAuth = hasTargetAuthComplete
+      const targetAuth = hasComplete
         ? { loginUrl: targetLoginUrl.trim(), username: targetUsername.trim(), password: targetPassword, mode: targetAuthMode }
         : undefined;
-      return gerarCasoTeste(httpClient, {
-        systemPath: systemPath.trim() || undefined,
-        images: images.length ? images : undefined,
-        targetAuth,
-      });
-    },
-    onSuccess: data => {
-      setMarkdown(data.markdown);
-      setCases(data.cases);
-      setMetaInfo(formatGerarMeta(data.meta));
-    },
-  });
+
+      await gerarCasoTesteStream(
+        {
+          systemPath: systemPath.trim() || undefined,
+          images: images.length ? images : undefined,
+          targetAuth,
+        },
+        token,
+        {
+          onProgress: p => setPhase(p),
+          onDelta: chars => setPartialChars(chars),
+          onResult: data => {
+            setMarkdown(data.markdown);
+            setCases(data.cases);
+            setMetaInfo(formatGerarMeta(data.meta));
+            setResultMeta(data.meta);
+          },
+          onError: (error, prompt) => {
+            setErrorMsg(friendlyError(error));
+            setErrorPrompt(prompt);
+          },
+        },
+      );
+    } catch (e) {
+      setErrorMsg(friendlyError(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setIsGenerating(false);
+    }
+  }
 
   const previewHtml = useMemo(() => {
     if (!markdown.trim()) return '';
     return marked.parse(markdown, { async: false }) as string;
   }, [markdown]);
+
+  const truncatedWarning = resultMeta?.outputTruncated === true;
+  const droppedCount = resultMeta?.casesDropped ?? 0;
+  const showQualityWarning = truncatedWarning || droppedCount > 0;
 
   function handleImagesChange(fileList: FileList | null) {
     if (!fileList?.length) return;
@@ -140,7 +197,7 @@ export function CasosTesteInteligentesPage() {
       if (!file.type.startsWith('image/')) continue;
       next.push({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) });
     }
-    setImagePreviews(prev => [...prev, ...next].slice(0, 8));
+    setImagePreviews(prev => [...prev, ...next].slice(0, MAX_IMAGES));
   }
 
   function removeImage(id: string) {
@@ -158,6 +215,7 @@ export function CasosTesteInteligentesPage() {
     setMarkdown('');
     setCases([]);
     setMetaInfo(null);
+    setResultMeta(null);
     setExportSummary(null);
     setRobotPlanSummary(null);
     setShowTargetAuth(false);
@@ -165,7 +223,9 @@ export function CasosTesteInteligentesPage() {
     setTargetUsername('');
     setTargetPassword('');
     setTargetAuthMode('auto');
-    gerarMutation.reset();
+    setErrorMsg(null);
+    setErrorPrompt(undefined);
+    setPartialChars(0);
   }
 
   function handleExportCsv() {
@@ -317,14 +377,14 @@ export function CasosTesteInteligentesPage() {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-semibold text-gray-500">
-                Imagens <span className="font-normal text-gray-400">(opcional, máx. 8)</span>
+                Imagens <span className="font-normal text-gray-400">(opcional, máx. {MAX_IMAGES})</span>
               </label>
               {imagePreviews.length > 0 && (
-                <span className="text-[11px] text-gray-400">{imagePreviews.length}/8</span>
+                <span className="text-[11px] text-gray-400">{imagePreviews.length}/{MAX_IMAGES}</span>
               )}
             </div>
 
-            {imagePreviews.length < 8 && (
+            {imagePreviews.length < MAX_IMAGES && (
               <label className="flex items-center gap-2 cursor-pointer w-fit px-3 py-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition-colors text-sm text-gray-600">
                 <Image size={15} />
                 Adicionar imagens
@@ -365,20 +425,43 @@ export function CasosTesteInteligentesPage() {
             <Button
               variant="primary"
               size="lg"
-              loading={gerarMutation.isPending}
-              disabled={!canGenerate || gerarMutation.isPending}
-              onClick={() => gerarMutation.mutate()}
+              loading={isGenerating}
+              disabled={!canGenerate || isGenerating}
+              onClick={handleGenerate}
             >
               <Sparkles size={18} />
-              {gerarMutation.isPending ? 'Gerando com IA…' : 'Gerar Casos de Teste'}
+              {isGenerating ? 'Gerando com IA…' : 'Gerar Casos de Teste'}
             </Button>
             <p className="text-[11px] text-gray-400">API: {apiBase}</p>
           </div>
 
-          {gerarMutation.isError ? (
-            <StatusMessage type="error">
-              {formatHttpError(gerarMutation.error)}
-            </StatusMessage>
+          {isGenerating ? (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-[rgba(2,136,209,0.2)] bg-[rgba(102,153,204,0.10)] mt-1">
+              <Spinner size="sm" className="text-[#003366]" />
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-sm font-medium text-[#003366]">{PHASE_LABELS[phase]}</span>
+                <span className="text-[11px] text-gray-500">
+                  {elapsedSeconds}s decorridos
+                  {phase === 'calling-ai' && partialChars > 0 ? ` · ~${partialChars.toLocaleString('pt-BR')} caracteres recebidos` : ''}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          {errorMsg ? (
+            <div className="mt-1">
+              <StatusMessage type="error">{errorMsg}</StatusMessage>
+              {errorPrompt ? (
+                <button
+                  type="button"
+                  onClick={() => downloadPromptTxt(errorPrompt)}
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 underline underline-offset-2"
+                >
+                  <Download size={13} />
+                  Baixar prompt (debug)
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </Card>
@@ -413,6 +496,21 @@ export function CasosTesteInteligentesPage() {
               Limpar
             </Button>
           </div>
+
+          {showQualityWarning ? (
+            <div className="mb-4">
+              <StatusMessage type="warning">
+                <AlertTriangle size={16} className="shrink-0" />
+                <span>
+                  {truncatedWarning ? 'Saída possivelmente truncada — alguns casos podem estar incompletos. ' : ''}
+                  {droppedCount > 0
+                    ? `${droppedCount} caso${droppedCount !== 1 ? 's' : ''} descartado${droppedCount !== 1 ? 's' : ''}${resultMeta?.casesFromAi != null ? ` de ${resultMeta.casesFromAi}` : ''} por formato inválido. `
+                    : ''}
+                  Revise o resultado antes de exportar.
+                </span>
+              </StatusMessage>
+            </div>
+          ) : null}
 
           {exportSummary ? (
             <pre className="text-[12px] bg-gray-50 border border-gray-200 rounded-lg p-3 whitespace-pre-wrap mb-4 text-gray-700">

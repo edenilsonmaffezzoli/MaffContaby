@@ -23,7 +23,7 @@ export function Spinner({ size = 'md', className = '' }: SpinnerProps) {
 }
 
 interface StatusMessageProps {
-  type: 'loading' | 'error' | 'success';
+  type: 'loading' | 'error' | 'success' | 'warning';
   children: React.ReactNode;
 }
 
@@ -31,6 +31,7 @@ const statusStyles = {
   loading: 'bg-[rgba(102,153,204,0.16)] text-[#003366] border border-[rgba(2,136,209,0.2)]',
   error: 'bg-[#FFEBEE] text-[#B71C1C] border border-[rgba(211,47,47,0.2)]',
   success: 'bg-[rgba(0,102,102,0.10)] text-[#005050] border border-[rgba(0,102,102,0.2)]',
+  warning: 'bg-[#FFF8E1] text-[#8A6D00] border border-[rgba(245,166,35,0.3)]',
 };
 
 export function StatusMessage({ type, children }: StatusMessageProps) {
