@@ -1,7 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
 import { PageHeader } from '@/components/ui/page-header';
-import { Select } from '@/components/ui/select';
 import { StatusMessage } from '@/components/ui/spinner';
 import { useHttpClient } from '@/hooks/use-http-client';
 import {
@@ -52,7 +51,7 @@ export function ImportarPage() {
   const httpClient = useHttpClient();
   const queryClient = useQueryClient();
 
-  const [replaceAll, setReplaceAll] = useState(true);
+  const [replaceAll] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -84,6 +83,8 @@ export function ImportarPage() {
       await queryClient.invalidateQueries({ queryKey: ['assets'] });
       await queryClient.invalidateQueries({ queryKey: ['people'] });
       await queryClient.invalidateQueries({ queryKey: ['entries'] });
+      await queryClient.invalidateQueries({ queryKey: ['groups'] });
+      await queryClient.invalidateQueries({ queryKey: ['competencias'] });
     },
   });
 
@@ -119,6 +120,8 @@ export function ImportarPage() {
       await queryClient.invalidateQueries({ queryKey: ['assets'] });
       await queryClient.invalidateQueries({ queryKey: ['people'] });
       await queryClient.invalidateQueries({ queryKey: ['entries'] });
+      await queryClient.invalidateQueries({ queryKey: ['groups'] });
+      await queryClient.invalidateQueries({ queryKey: ['competencias'] });
     },
   });
 
@@ -229,15 +232,15 @@ export function ImportarPage() {
 
           {/* Controls */}
           <div className="flex flex-col gap-3 min-w-[200px]">
-            <Select
-              label="Modo de importação"
-              value={replaceAll ? '1' : '0'}
-              onChange={e => setReplaceAll(e.target.value === '1')}
-              disabled={!canInteract}
-            >
-              <option value="1">Substituir tudo</option>
-              <option value="0">Mesclar dados</option>
-            </Select>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-1.5">Modo de importação</p>
+              <div className="flex items-start gap-2 px-3 py-2.5 bg-[rgba(211,47,47,0.06)] border border-[rgba(211,47,47,0.2)] rounded-lg">
+                <AlertCircle size={14} className="text-[#D32F2F] shrink-0 mt-0.5" />
+                <p className="text-[11px] text-[#B71C1C] leading-snug m-0">
+                  <strong>Substitui toda a base.</strong> A importação apaga os dados atuais e grava o conteúdo do arquivo.
+                </p>
+              </div>
+            </div>
 
             <Button
               variant="primary"

@@ -122,6 +122,33 @@ export async function gerarCasoTesteStream(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let settled = false;
+
+  const processEvent = (evt: { event: string; data: string }) => {
+    let data: unknown = null;
+    try {
+      data = evt.data ? JSON.parse(evt.data) : null;
+    } catch {
+      data = null;
+    }
+    if (evt.event === 'progress') {
+      const d = data as { phase?: GerarStreamPhase; urlContentFetched?: boolean; urlFetchError?: string } | null;
+      if (d?.phase) handlers.onProgress?.(d.phase, { urlContentFetched: d.urlContentFetched, urlFetchError: d.urlFetchError });
+    } else if (evt.event === 'status') {
+      const d = data as { status?: string } | null;
+      if (d?.status) handlers.onStatus?.(d.status);
+    } else if (evt.event === 'delta') {
+      const d = data as { chars?: number } | null;
+      if (typeof d?.chars === 'number') handlers.onDelta?.(d.chars);
+    } else if (evt.event === 'result') {
+      settled = true;
+      handlers.onResult?.(data as GerarCasoTesteResponse);
+    } else if (evt.event === 'error') {
+      settled = true;
+      const d = data as { error?: string; prompt?: string } | null;
+      handlers.onError?.(d?.error ?? 'Erro ao gerar casos de teste', d?.prompt);
+    }
+  };
 
   while (true) {
     const { done, value } = await reader.read();
@@ -129,30 +156,16 @@ export async function gerarCasoTesteStream(
     buffer += decoder.decode(value, { stream: true });
     const { events, rest } = parseSseBlocks(buffer);
     buffer = rest;
-    for (const evt of events) {
-      let data: unknown = null;
-      try {
-        data = evt.data ? JSON.parse(evt.data) : null;
-      } catch {
-        data = null;
-      }
-      if (evt.event === 'progress') {
-        const d = data as { phase?: GerarStreamPhase; urlContentFetched?: boolean; urlFetchError?: string } | null;
-        if (d?.phase) handlers.onProgress?.(d.phase, { urlContentFetched: d.urlContentFetched, urlFetchError: d.urlFetchError });
-      } else if (evt.event === 'status') {
-        const d = data as { status?: string } | null;
-        if (d?.status) handlers.onStatus?.(d.status);
-      } else if (evt.event === 'delta') {
-        const d = data as { chars?: number } | null;
-        if (typeof d?.chars === 'number') handlers.onDelta?.(d.chars);
-      } else if (evt.event === 'result') {
-        handlers.onResult?.(data as GerarCasoTesteResponse);
-      } else if (evt.event === 'error') {
-        const d = data as { error?: string; prompt?: string } | null;
-        handlers.onError?.(d?.error ?? 'Erro ao gerar casos de teste', d?.prompt);
-      }
-    }
+    for (const evt of events) processEvent(evt);
   }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    const { events } = parseSseBlocks(`${buffer}\n\n`);
+    for (const evt of events) processEvent(evt);
+  }
+
+  if (!settled) handlers.onError?.('Stream encerrado sem resultado. Tente novamente.');
 }
 
 export type GerarCodigoStreamHandlers = {
@@ -192,6 +205,33 @@ export async function gerarCodigoRobotStream(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let settled = false;
+
+  const processEvent = (evt: { event: string; data: string }) => {
+    let data: unknown = null;
+    try {
+      data = evt.data ? JSON.parse(evt.data) : null;
+    } catch {
+      data = null;
+    }
+    if (evt.event === 'progress') {
+      const d = data as { phase?: GerarStreamPhase; urlContentFetched?: boolean; urlFetchError?: string } | null;
+      if (d?.phase) handlers.onProgress?.(d.phase, { urlContentFetched: d.urlContentFetched, urlFetchError: d.urlFetchError });
+    } else if (evt.event === 'status') {
+      const d = data as { status?: string } | null;
+      if (d?.status) handlers.onStatus?.(d.status);
+    } else if (evt.event === 'delta') {
+      const d = data as { chars?: number } | null;
+      if (typeof d?.chars === 'number') handlers.onDelta?.(d.chars);
+    } else if (evt.event === 'result') {
+      settled = true;
+      handlers.onResult?.(data as GerarCodigoRobotResponse);
+    } else if (evt.event === 'error') {
+      settled = true;
+      const d = data as { error?: string; prompt?: string } | null;
+      handlers.onError?.(d?.error ?? 'Erro ao gerar o código automatizado', d?.prompt);
+    }
+  };
 
   while (true) {
     const { done, value } = await reader.read();
@@ -199,28 +239,14 @@ export async function gerarCodigoRobotStream(
     buffer += decoder.decode(value, { stream: true });
     const { events, rest } = parseSseBlocks(buffer);
     buffer = rest;
-    for (const evt of events) {
-      let data: unknown = null;
-      try {
-        data = evt.data ? JSON.parse(evt.data) : null;
-      } catch {
-        data = null;
-      }
-      if (evt.event === 'progress') {
-        const d = data as { phase?: GerarStreamPhase; urlContentFetched?: boolean; urlFetchError?: string } | null;
-        if (d?.phase) handlers.onProgress?.(d.phase, { urlContentFetched: d.urlContentFetched, urlFetchError: d.urlFetchError });
-      } else if (evt.event === 'status') {
-        const d = data as { status?: string } | null;
-        if (d?.status) handlers.onStatus?.(d.status);
-      } else if (evt.event === 'delta') {
-        const d = data as { chars?: number } | null;
-        if (typeof d?.chars === 'number') handlers.onDelta?.(d.chars);
-      } else if (evt.event === 'result') {
-        handlers.onResult?.(data as GerarCodigoRobotResponse);
-      } else if (evt.event === 'error') {
-        const d = data as { error?: string; prompt?: string } | null;
-        handlers.onError?.(d?.error ?? 'Erro ao gerar o código automatizado', d?.prompt);
-      }
-    }
+    for (const evt of events) processEvent(evt);
   }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    const { events } = parseSseBlocks(`${buffer}\n\n`);
+    for (const evt of events) processEvent(evt);
+  }
+
+  if (!settled) handlers.onError?.('Stream encerrado sem resultado. Tente novamente.');
 }

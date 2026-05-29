@@ -78,7 +78,9 @@ export function groupCasesBySubject(cases: QaseCase[], modulos: string[] = []): 
       'Casos reagrupados automaticamente por assunto (a IA retornou poucas suites distintas).';
     for (const c of enriched) {
       c.suite =
-        inferSuiteFromText(`${c.title} ${c.description ?? ''}`, modulosClean) ?? c.suite ?? 'Geral';
+        inferSuiteFromText(`${c.title} ${c.description ?? ''} ${c.preconditions ?? ''}`, modulosClean) ??
+        c.suite ??
+        'Geral';
       c.subsuite = inferSubsuite(c);
     }
   }

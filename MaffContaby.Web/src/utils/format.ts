@@ -36,5 +36,7 @@ export function formatCompetencia(date: Date) {
 }
 
 export function competenciaToDateOnly(competencia: string) {
-  return `${competencia}-01`;
+  const v = competencia.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  return `${v}-01`;
 }

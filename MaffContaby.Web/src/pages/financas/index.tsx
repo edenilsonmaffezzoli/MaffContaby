@@ -135,7 +135,7 @@ function NovoAtivo(props: {
   const [disponivel, setDisponivel] = useState(true);
 
   const saldoParsed = parseDecimalBRL(saldo);
-  const canSubmit = !props.disabled && name.trim() && saldoParsed !== null;
+  const canSubmit = !props.disabled && name.trim() && saldoParsed !== null && saldoParsed >= 0;
 
   return (
     <Card>
@@ -177,7 +177,7 @@ function NovoAtivo(props: {
           loading={props.isLoading}
           disabled={!canSubmit}
           onClick={() => {
-            if (saldoParsed === null) return;
+            if (saldoParsed === null || saldoParsed < 0) return;
             props.onCreate({ name: name.trim(), saldo: saldoParsed, disponivelImediatamente: disponivel });
             setName('');
             setSaldo('');
@@ -219,9 +219,9 @@ function AssetRow(props: {
       onDelete={props.onDelete}
       isEditing={isEditing}
       isSaving={props.isSaving}
-      canSave={name.trim().length > 0 && saldoParsed !== null && !props.disabled}
+      canSave={name.trim().length > 0 && saldoParsed !== null && saldoParsed >= 0 && !props.disabled}
       onSaveEdit={() => {
-        if (saldoParsed === null) return;
+        if (saldoParsed === null || saldoParsed < 0) return;
         props.onUpdate({ id: props.asset.id, name: name.trim(), saldo: saldoParsed, disponivelImediatamente: disponivel });
         setIsEditing(false);
       }}

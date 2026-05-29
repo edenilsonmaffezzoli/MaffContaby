@@ -17,7 +17,7 @@ import {
 } from '@/services/entries-service';
 import { getGroups } from '@/services/groups-service';
 import { getPeople } from '@/services/people-service';
-import { competenciaToDateOnly, formatCompetencia, formatCurrencyBRL } from '@/utils/format';
+import { competenciaToDateOnly, formatCompetencia, formatCurrencyBRL, parseDecimalBRL } from '@/utils/format';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart2,
@@ -44,12 +44,6 @@ type GroupedByPerson = {
   count: number;
   groups: Grouped[];
 };
-
-function parseBrazilianCurrencyInput(value: string) {
-  const normalized = value.trim().replace(/\./g, '').replace(',', '.');
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : NaN;
-}
 
 export function MovimentacoesPage() {
   const httpClient = useHttpClient();
@@ -401,9 +395,10 @@ function NovaMovimentacao(props: {
   const [grupo, setGrupo] = useState('');
   const [valor, setValor] = useState('');
   const [observacao, setObservacao] = useState('');
-  const parsedValor = parseBrazilianCurrencyInput(valor);
+  const parsedValor = parseDecimalBRL(valor);
 
-  const canSubmit = !props.disabled && personId && competencia.trim() && grupo.trim() && parsedValor > 0;
+  const canSubmit =
+    !props.disabled && personId && competencia.trim() && grupo.trim() && parsedValor !== null && parsedValor > 0;
 
   return (
     <div className="flex flex-wrap gap-3 items-end">
@@ -488,7 +483,7 @@ function NovaMovimentacao(props: {
             personId,
             competencia: competencia.trim(),
             grupo: grupo.trim(),
-            valor: parsedValor,
+            valor: parsedValor ?? 0,
             observacao: observacao.trim() ? observacao.trim() : undefined,
           });
           setValor('');
@@ -632,6 +627,7 @@ function EntryRow(props: {
   }, [groupsQuery.data, props.entry.grupo]);
 
   const competencia = props.entry.competencia;
+  const parsedValor = parseDecimalBRL(valor);
 
   if (isEditing) {
     return (
@@ -684,13 +680,13 @@ function EntryRow(props: {
             variant="primary"
             size="sm"
             loading={props.disabled}
-            disabled={!grupo.trim() || Number(valor) <= 0}
+            disabled={!grupo.trim() || parsedValor === null || parsedValor <= 0}
             onClick={() => {
               props.onUpdate({
                 id: props.entry.id,
                 competencia,
                 grupo: grupo.trim(),
-                valor: Number(valor),
+                valor: parsedValor ?? 0,
                 data: data || undefined,
                 observacao: observacao.trim() ? observacao.trim() : undefined,
               });

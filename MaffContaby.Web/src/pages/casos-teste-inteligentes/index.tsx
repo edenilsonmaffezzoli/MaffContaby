@@ -112,7 +112,6 @@ type ImagePreview = {
 
 export function CasosTesteInteligentesPage() {
   const token = localStorage.getItem('gdp_token')?.trim() ?? '';
-  if (!token) return <Navigate to="/login" replace />;
 
   const [exportSummary, setExportSummary] = useState<QaseCsvExportStats | null>(null);
   const [robotPlanSummary, setRobotPlanSummary] = useState<RobotPlanStats | null>(null);
@@ -370,6 +369,8 @@ export function CasosTesteInteligentesPage() {
       : Boolean(systemPath.trim()) || imagePreviews.length > 0);
 
   const apiBase = getApiBaseUrl();
+
+  if (!token) return <Navigate to="/login" replace />;
 
   return (
     <div className="flex flex-col gap-5">
