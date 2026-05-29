@@ -11,7 +11,7 @@ export function buildGerarCodigoRobotPrompt(
   files: SourceFileInput[],
   truncated: boolean,
   imageCount: number,
-  pageContext?: PageContextForPrompt,
+  pageContext?: PageContextForPrompt,  
 ): string {
   const systemPath = request.systemPath?.trim() || '(não informado)';
   const sourceLabel = request.sourcePathLabel?.trim() || '(não informado)';
