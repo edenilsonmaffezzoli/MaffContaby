@@ -565,7 +565,7 @@ async function readDb(env: Env): Promise<DbSnapshot> {
         return {
           id: typeof e.id === 'string' && e.id.trim() ? e.id.trim() : crypto.randomUUID(),
           personId: typeof e.personId === 'string' ? e.personId : '',
-          competencia: typeof e.competencia === 'string' ? e.competencia : '',
+          competencia: typeof e.competencia === 'string' ? normalizeCompetencia(e.competencia) : '',
           grupo: typeof e.grupo === 'string' ? e.grupo : '',
           valor,
           observacao: typeof e.observacao === 'string' ? e.observacao : null,

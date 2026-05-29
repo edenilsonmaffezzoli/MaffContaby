@@ -8,6 +8,19 @@ import { AlertCircle, LogIn, UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+function extractApiError(e: unknown, fallback: string): string {
+  const err = e as { response?: { data?: unknown }; message?: string };
+  const data = err?.response?.data;
+  if (typeof data === 'string' && data.trim()) return data.trim();
+  if (data && typeof data === 'object') {
+    const obj = data as { error?: unknown; message?: unknown };
+    if (typeof obj.error === 'string' && obj.error.trim()) return obj.error.trim();
+    if (typeof obj.message === 'string' && obj.message.trim()) return obj.message.trim();
+  }
+  if (typeof err?.message === 'string' && err.message.trim()) return err.message.trim();
+  return fallback;
+}
+
 function LogoMark() {
   return (
     <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -39,8 +52,9 @@ export function LoginPage() {
   const validation = useMemo(() => {
     if (!username.trim()) return 'Usuário é obrigatório';
     if (!password) return 'Senha é obrigatória';
+    if (mode === 'bootstrap' && password.length < 8) return 'A senha deve ter ao menos 8 caracteres';
     return null;
-  }, [username, password]);
+  }, [username, password, mode]);
 
   const bootstrapMutation = useMutation({
     mutationFn: async () => bootstrapAdmin(httpClient, { username: username.trim(), password }),
@@ -49,7 +63,7 @@ export function LoginPage() {
       localStorage.setItem('gdp_spa_base_path', import.meta.env.BASE_URL);
       statusQuery.refetch();
     },
-    onError: e => setError(e instanceof Error ? e.message : 'Falha ao criar admin'),
+    onError: e => setError(extractApiError(e, 'Falha ao criar admin')),
   });
 
   const loginMutation = useMutation({
@@ -61,7 +75,7 @@ export function LoginPage() {
       setError(null);
       navigate('/gdp', { replace: true });
     },
-    onError: e => setError(e instanceof Error ? e.message : 'Falha no login'),
+    onError: e => setError(extractApiError(e, 'Falha no login')),
   });
 
   const isBusy = statusQuery.isLoading || bootstrapMutation.isPending || loginMutation.isPending;

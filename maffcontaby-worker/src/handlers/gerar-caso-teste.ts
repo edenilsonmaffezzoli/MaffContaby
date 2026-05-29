@@ -365,7 +365,7 @@ function validateTargetAuth(
 
   if (!loginUrl) return { ok: false, message: 'Informe a URL de login do sistema alvo' };
   if (!username) return { ok: false, message: 'Informe o usuário de teste do sistema alvo' };
-  if (!password) return { ok: false, message: 'Informe a senha de teste do sistema alvo' };
+  if (!password.trim()) return { ok: false, message: 'Informe a senha de teste do sistema alvo' };
   if (!systemPath || !isHttpSystemPath(systemPath)) {
     return {
       ok: false,
@@ -406,11 +406,11 @@ function validateRequest(body: GerarCasoTesteRequest | null): { ok: true; body: 
   }
 
   for (const img of body.images ?? []) {
-    const mime = normalizeMime(img.mimeType ?? '');
+    const mime = normalizeMime(typeof img.mimeType === 'string' ? img.mimeType : '');
     if (!ALLOWED_IMAGE_MIME.has(mime)) {
-      return { ok: false, message: `Tipo de imagem não suportado: ${img.mimeType}` };
+      return { ok: false, message: `Tipo de imagem não suportado: ${typeof img.mimeType === 'string' ? img.mimeType : 'desconhecido'}` };
     }
-    const b64 = (img.base64 ?? '').replace(/\s/g, '');
+    const b64 = (typeof img.base64 === 'string' ? img.base64 : '').replace(/\s/g, '');
     if (!b64) return { ok: false, message: 'Imagem sem dados base64' };
     if (estimateBase64Bytes(b64) > MAX_IMAGE_BYTES) {
       return { ok: false, message: 'Imagem excede 4 MB' };
