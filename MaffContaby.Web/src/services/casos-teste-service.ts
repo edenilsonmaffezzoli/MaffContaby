@@ -11,6 +11,23 @@ export async function gerarCasoTeste(http: AxiosInstance, body: GerarCasoTesteRe
   return data;
 }
 
+export type CursorModelOption = {
+  id: string;
+  displayName: string;
+};
+
+export type ListCursorModelsResponse = {
+  ok: true;
+  models: CursorModelOption[];
+  default: string;
+};
+
+/** Lista os modelos de IA disponíveis (admin escolhe qual usar). */
+export async function listCursorModels(http: AxiosInstance) {
+  const { data } = await http.get<ListCursorModelsResponse>('/api/cursor-models');
+  return data;
+}
+
 export type GerarStreamPhase = 'building-prompt' | 'calling-ai' | 'parsing';
 
 export type GerarStreamHandlers = {

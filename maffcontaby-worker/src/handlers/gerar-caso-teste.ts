@@ -453,13 +453,14 @@ export async function prepareGeneration(
   request: Request,
   env: GerarCasoTesteEnv,
   promptBuilder: PromptBuilder = buildGerarCasoTestePrompt,
+  isAdmin = false,
 ): Promise<PrepareGenerationResult> {
   const apiKey = env.CURSOR_API_KEY?.trim();
   if (!apiKey) {
     return { ok: false, response: text('CURSOR_API_KEY não configurada no Worker', 500) };
   }
 
-  const model = env.CURSOR_MODEL?.trim() || DEFAULT_MODEL;
+  const defaultModel = env.CURSOR_MODEL?.trim() || DEFAULT_MODEL;
   const maxChars = parsePositiveInt(env.CURSOR_MAX_INPUT_CHARS, DEFAULT_MAX_INPUT_CHARS);
   const timeoutSeconds = parsePositiveInt(env.CURSOR_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS);
 
@@ -474,6 +475,9 @@ export async function prepareGeneration(
   if (!validated.ok) return { ok: false, response: text(validated.message, 400) };
 
   const req = validated.body;
+  // Apenas admin pode sobrescrever o modelo; demais usuários usam o padrão.
+  const requestedModel = isAdmin ? req.model?.trim() : undefined;
+  const model = requestedModel || defaultModel;
   const systemPath = req.systemPath?.trim() ?? '';
   const targetAuth = req.targetAuth;
   const useAuth =
@@ -546,8 +550,8 @@ function buildSuccessResponse(prep: PreparedGeneration, cursorOut: Awaited<Retur
   };
 }
 
-export async function handleGerarCasoTeste(request: Request, env: GerarCasoTesteEnv): Promise<Response> {
-  const prepared = await prepareGeneration(request, env);
+export async function handleGerarCasoTeste(request: Request, env: GerarCasoTesteEnv, isAdmin = false): Promise<Response> {
+  const prepared = await prepareGeneration(request, env, buildGerarCasoTestePrompt, isAdmin);
   if (!prepared.ok) return prepared.response;
 
   const prep = prepared.data;
@@ -610,8 +614,8 @@ export function startSseHeartbeat(
 }
 
 /** Versão SSE: emite eventos de progresso ao cliente enquanto a IA gera os casos. */
-export async function handleGerarCasoTesteStream(request: Request, env: GerarCasoTesteEnv): Promise<Response> {
-  const prepared = await prepareGeneration(request, env);
+export async function handleGerarCasoTesteStream(request: Request, env: GerarCasoTesteEnv, isAdmin = false): Promise<Response> {
+  const prepared = await prepareGeneration(request, env, buildGerarCasoTestePrompt, isAdmin);
   if (!prepared.ok) return prepared.response;
 
   const prep = prepared.data;

@@ -20,6 +20,8 @@ export type GerarCasoTesteRequest = {
   images?: ImageInput[];
   extraContext?: string;
   targetAuth?: TargetAuthInput;
+  /** Modelo de IA escolhido (apenas admin). */
+  model?: string;
 };
 
 export type QaseStep = {

@@ -143,8 +143,8 @@ function sseEncode(event: string, data: unknown): Uint8Array {
 }
 
 /** Versão SSE: gera um projeto Robot Framework + Browser Library com base no front-end. */
-export async function handleGerarCodigoRobotStream(request: Request, env: GerarCasoTesteEnv): Promise<Response> {
-  const prepared = await prepareGeneration(request, env, buildGerarCodigoRobotPrompt);
+export async function handleGerarCodigoRobotStream(request: Request, env: GerarCasoTesteEnv, isAdmin = false): Promise<Response> {
+  const prepared = await prepareGeneration(request, env, buildGerarCodigoRobotPrompt, isAdmin);
   if (!prepared.ok) return prepared.response;
 
   const prep = prepared.data;
