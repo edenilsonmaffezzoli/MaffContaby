@@ -110,6 +110,34 @@ function assertTerminalStatus(status: CursorRunStatus): void {
   if (status === 'EXPIRED') throw new Error('Run do Cursor expirou');
 }
 
+export type CursorModelInfo = {
+  id: string;
+  displayName: string;
+};
+
+/** Lista os modelos disponíveis na conta (GET /v1/models). */
+export async function listModels(apiKey: string): Promise<CursorModelInfo[]> {
+  const res = await fetch(`${CURSOR_API_BASE}/v1/models`, {
+    method: 'GET',
+    headers: authHeaders(apiKey),
+  });
+
+  const data = (await parseJsonResponse(res, 'list models')) as {
+    items?: Array<{ id?: unknown; displayName?: unknown }>;
+  };
+
+  const items = Array.isArray(data.items) ? data.items : [];
+  const models: CursorModelInfo[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    if (!id) continue;
+    const displayName = typeof item.displayName === 'string' && item.displayName.trim() ? item.displayName.trim() : id;
+    models.push({ id, displayName });
+  }
+  return models;
+}
+
 export async function createAgentRun(
   config: CursorConfig,
   prompt: string,

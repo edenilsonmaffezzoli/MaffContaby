@@ -8,8 +8,12 @@ import { Spinner, StatusMessage } from '@/components/ui/spinner';
 import {
   gerarCasoTesteStream,
   gerarCodigoRobotStream,
+  listCursorModels,
   type GerarStreamPhase,
 } from '@/services/casos-teste-service';
+import { me } from '@/services/auth-service';
+import { useHttpClient } from '@/hooks/use-http-client';
+import { useQuery } from '@tanstack/react-query';
 import type {
   GerarCasoTesteResponse,
   GerarCodigoRobotResponse,
@@ -50,6 +54,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 
 const MAX_IMAGES = 5;
+const DEFAULT_MODEL = 'composer-2.5';
 
 type GerarMeta = GerarCasoTesteResponse['meta'];
 
@@ -112,6 +117,25 @@ type ImagePreview = {
 
 export function CasosTesteInteligentesPage() {
   const token = localStorage.getItem('gdp_token')?.trim() ?? '';
+  const httpClient = useHttpClient();
+
+  const meQuery = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: () => me(httpClient),
+    retry: false,
+    enabled: Boolean(token),
+  });
+  const isAdmin = Boolean(meQuery.data?.user.admin);
+
+  const modelsQuery = useQuery({
+    queryKey: ['cursor', 'models'],
+    queryFn: () => listCursorModels(httpClient),
+    enabled: isAdmin,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
 
   const [exportSummary, setExportSummary] = useState<QaseCsvExportStats | null>(null);
   const [robotPlanSummary, setRobotPlanSummary] = useState<RobotPlanStats | null>(null);
@@ -143,6 +167,17 @@ export function CasosTesteInteligentesPage() {
   const [robotZipSummary, setRobotZipSummary] = useState<RobotZipStats | null>(null);
   const [codeErrorMsg, setCodeErrorMsg] = useState<string | null>(null);
   const [codeErrorPrompt, setCodeErrorPrompt] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    const data = modelsQuery.data;
+    if (!data) return;
+    const ids = data.models.map(m => m.id);
+    setSelectedModel(prev => {
+      if (ids.includes(prev)) return prev;
+      if (data.default && ids.includes(data.default)) return data.default;
+      return ids[0] ?? data.default ?? prev;
+    });
+  }, [modelsQuery.data]);
 
   useEffect(() => {
     if (!isGenerating && !isGeneratingCode) return;
@@ -186,6 +221,7 @@ export function CasosTesteInteligentesPage() {
           systemPath: systemPath.trim() || undefined,
           images: images.length ? images : undefined,
           targetAuth,
+          model: isAdmin ? selectedModel : undefined,
         },
         token,
         {
@@ -238,6 +274,7 @@ export function CasosTesteInteligentesPage() {
           systemPath: systemPath.trim() || undefined,
           images: images.length ? images : undefined,
           targetAuth,
+          model: isAdmin ? selectedModel : undefined,
         },
         token,
         {
@@ -393,6 +430,31 @@ export function CasosTesteInteligentesPage() {
               onChange={e => setSystemPath(e.target.value)}
             />
           </div>
+
+          {/* Model selector (admin only) */}
+          {isAdmin && (
+            <div>
+              <Select
+                label="Modelo de IA"
+                value={selectedModel}
+                onChange={e => setSelectedModel(e.target.value)}
+                disabled={isGenerating || isGeneratingCode}
+              >
+                {modelsQuery.data?.models.length ? (
+                  modelsQuery.data.models.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.displayName}
+                    </option>
+                  ))
+                ) : (
+                  <option value={selectedModel}>{selectedModel}</option>
+                )}
+              </Select>
+              <p className="text-[11px] text-gray-400 mt-1">
+                Apenas administradores. Os modelos rodam sempre em Max Mode (Cloud Agents).
+              </p>
+            </div>
+          )}
 
           {/* Auth toggle */}
           <div>

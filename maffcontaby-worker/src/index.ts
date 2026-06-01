@@ -2,6 +2,7 @@ import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { handleGerarCasoTeste, handleGerarCasoTesteStream } from './handlers/gerar-caso-teste';
 import { handleGerarCodigoRobotStream } from './handlers/gerar-codigo-robot';
+import { listModels } from './cursor-client';
 import robotoRegular from './fonts/Roboto-Regular.ttf';
 import robotoBold from './fonts/Roboto-Bold.ttf';
 
@@ -847,11 +848,28 @@ export default {
         if (!session.ok) return withCors(session.response);
       }
 
+      if (path === '/api/cursor-models') {
+        if (method !== 'GET') return withCors(methodNotAllowed());
+        const session = await requireSession(request, env);
+        if (!session.ok) return withCors(session.response);
+        const defaultModel = env.CURSOR_MODEL?.trim() || 'composer-2.5';
+        const apiKey = env.CURSOR_API_KEY?.trim();
+        if (!apiKey) {
+          return withCors(json({ ok: true, models: [], default: defaultModel }));
+        }
+        try {
+          const models = await listModels(apiKey);
+          return withCors(json({ ok: true, models, default: defaultModel }));
+        } catch {
+          return withCors(json({ ok: true, models: [], default: defaultModel }));
+        }
+      }
+
       if (path === '/api/gerar-caso-teste/stream') {
         if (method !== 'POST') return withCors(methodNotAllowed());
         const session = await requireSession(request, env);
         if (!session.ok) return withCors(session.response);
-        const response = await handleGerarCasoTesteStream(request, env);
+        const response = await handleGerarCasoTesteStream(request, env, session.user.admin);
         return withCors(response);
       }
 
@@ -859,7 +877,7 @@ export default {
         if (method !== 'POST') return withCors(methodNotAllowed());
         const session = await requireSession(request, env);
         if (!session.ok) return withCors(session.response);
-        const response = await handleGerarCodigoRobotStream(request, env);
+        const response = await handleGerarCodigoRobotStream(request, env, session.user.admin);
         return withCors(response);
       }
 
@@ -867,7 +885,7 @@ export default {
         if (method !== 'POST') return withCors(methodNotAllowed());
         const session = await requireSession(request, env);
         if (!session.ok) return withCors(session.response);
-        const response = await handleGerarCasoTeste(request, env);
+        const response = await handleGerarCasoTeste(request, env, session.user.admin);
         return withCors(response);
       }
 
