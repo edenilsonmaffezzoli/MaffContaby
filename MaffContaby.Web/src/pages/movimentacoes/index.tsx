@@ -480,7 +480,7 @@ function NovaMovimentacao(props: {
         value={competencias}
         onChange={setCompetencias}
         disabled={props.disabled}
-        hint="Selecione uma ou mais competências"
+        hint="Clique para abrir a seleção por ano"
       />
 
       <div className="flex-1 min-w-[180px]">
