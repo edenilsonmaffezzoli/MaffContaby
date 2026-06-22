@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
+import { CompetenciaMultiSelect } from '@/components/ui/competencia-multi-select';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
@@ -17,7 +18,7 @@ import {
 } from '@/services/entries-service';
 import { getGroups } from '@/services/groups-service';
 import { getPeople } from '@/services/people-service';
-import { competenciaToDateOnly, formatCompetencia, formatCurrencyBRL, parseDecimalBRL } from '@/utils/format';
+import { competenciaToDateOnly, formatCompetencia, formatCompetenciaLabel, formatCurrencyBRL, parseDecimalBRL } from '@/utils/format';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart2,
@@ -43,6 +44,18 @@ type GroupedByPerson = {
   total: number;
   count: number;
   groups: Grouped[];
+};
+
+const ENTRY_ROW_GRID = '1fr 110px 72px';
+
+type EntryUpdateInput = {
+  id: string;
+  competencia: string;
+  grupo: string;
+  valor: number;
+  data?: string;
+  observacao?: string;
+  conferido?: boolean;
 };
 
 export function MovimentacoesPage() {
@@ -129,17 +142,30 @@ export function MovimentacoesPage() {
   };
 
   const createEntryMutation = useMutation({
-    mutationFn: (input: { personId: string; competencia: string; grupo: string; valor: number; observacao?: string }) =>
-      createEntry(httpClient, {
-        personId: input.personId,
-        competencia: competenciaToDateOnly(input.competencia),
-        grupo: input.grupo,
-        valor: input.valor,
-        observacao: input.observacao ?? null,
-      }),
-    onSuccess: async createdEntry => {
+    mutationFn: async (input: {
+      personId: string;
+      competencias: string[];
+      grupo: string;
+      valor: number;
+      observacao?: string;
+    }) => {
+      const createdEntries = [];
+      for (const itemCompetencia of input.competencias) {
+        const createdEntry = await createEntry(httpClient, {
+          personId: input.personId,
+          competencia: competenciaToDateOnly(itemCompetencia),
+          grupo: input.grupo,
+          valor: input.valor,
+          observacao: input.observacao ?? null,
+        });
+        createdEntries.push(createdEntry);
+      }
+      return createdEntries;
+    },
+    onSuccess: async createdEntries => {
       await queryClient.invalidateQueries({ queryKey: ['entries'] });
-      setSessionCreatedEntryIds(prev => [createdEntry.id, ...prev.filter(id => id !== createdEntry.id)]);
+      const createdIds = createdEntries.map(entry => entry.id);
+      setSessionCreatedEntryIds(prev => [...createdIds, ...prev.filter(id => !createdIds.includes(id))]);
     },
   });
 
@@ -149,16 +175,33 @@ export function MovimentacoesPage() {
   });
 
   const updateEntryMutation = useMutation({
-    mutationFn: (input: { id: string; competencia: string; grupo: string; valor: number; data?: string; observacao?: string }) =>
+    mutationFn: (input: EntryUpdateInput) =>
       updateEntry(httpClient, input.id, {
         competencia: input.competencia,
         grupo: input.grupo,
         valor: input.valor,
         data: input.data ?? null,
         observacao: input.observacao ?? null,
+        conferido: input.conferido ?? false,
       }),
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['entries'] }),
   });
+
+  const toggleConferidoMutation = useMutation({
+    mutationFn: (input: { entry: EntryDto; conferido: boolean }) =>
+      updateEntry(httpClient, input.entry.id, {
+        competencia: input.entry.competencia,
+        grupo: input.entry.grupo,
+        valor: input.entry.valor,
+        data: input.entry.data,
+        observacao: input.entry.observacao,
+        conferido: input.conferido,
+      }),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['entries'] }),
+  });
+
+  const isRowActionPending =
+    deleteEntryMutation.isPending || updateEntryMutation.isPending || toggleConferidoMutation.isPending;
 
   const isLoading = entriesQuery.isLoading;
   const hasData = grouped.length > 0;
@@ -304,13 +347,15 @@ export function MovimentacoesPage() {
                   <p className="text-sm text-gray-500 m-0">Os novos lançamentos aparecerão aqui para edição e exclusão.</p>
                 ) : (
                   <div className="flex flex-col gap-2 max-h-[45vh] overflow-y-auto pr-1">
+                    <EntryListHeader />
                     {sessionEntries.map(entry => (
                       <EntryRow
                         key={entry.id}
                         entry={entry}
                         onDelete={() => deleteEntryMutation.mutate(entry.id)}
                         onUpdate={data => updateEntryMutation.mutate(data)}
-                        disabled={deleteEntryMutation.isPending || updateEntryMutation.isPending}
+                        onToggleConferido={conferido => toggleConferidoMutation.mutate({ entry, conferido })}
+                        disabled={isRowActionPending}
                       />
                     ))}
                   </div>
@@ -357,7 +402,8 @@ export function MovimentacoesPage() {
                 person={p}
                 onDelete={id => deleteEntryMutation.mutate(id)}
                 onUpdate={data => updateEntryMutation.mutate(data)}
-                disabled={deleteEntryMutation.isPending || updateEntryMutation.isPending}
+                onToggleConferido={(entry, conferido) => toggleConferidoMutation.mutate({ entry, conferido })}
+                disabled={isRowActionPending}
               />
             ))}
           </div>
@@ -369,7 +415,8 @@ export function MovimentacoesPage() {
                 group={g}
                 onDelete={id => deleteEntryMutation.mutate(id)}
                 onUpdate={data => updateEntryMutation.mutate(data)}
-                disabled={deleteEntryMutation.isPending || updateEntryMutation.isPending}
+                onToggleConferido={(entry, conferido) => toggleConferidoMutation.mutate({ entry, conferido })}
+                disabled={isRowActionPending}
               />
             ))}
           </div>
@@ -388,17 +435,24 @@ function NovaMovimentacao(props: {
   groups: { id: string; name: string }[];
   isGroupsLoading: boolean;
   defaultCompetencia: string;
-  onCreate: (data: { personId: string; competencia: string; grupo: string; valor: number; observacao?: string }) => void;
+  onCreate: (data: { personId: string; competencias: string[]; grupo: string; valor: number; observacao?: string }) => void;
 }) {
   const [personId, setPersonId] = useState('');
-  const [competencia, setCompetencia] = useState(props.defaultCompetencia);
+  const [competencias, setCompetencias] = useState<string[]>(() =>
+    props.defaultCompetencia.trim() ? [props.defaultCompetencia.trim()] : [],
+  );
   const [grupo, setGrupo] = useState('');
   const [valor, setValor] = useState('');
   const [observacao, setObservacao] = useState('');
   const parsedValor = parseDecimalBRL(valor);
 
   const canSubmit =
-    !props.disabled && personId && competencia.trim() && grupo.trim() && parsedValor !== null && parsedValor > 0;
+    !props.disabled &&
+    personId &&
+    competencias.length > 0 &&
+    grupo.trim() &&
+    parsedValor !== null &&
+    parsedValor > 0;
 
   return (
     <div className="flex flex-wrap gap-3 items-end">
@@ -422,15 +476,12 @@ function NovaMovimentacao(props: {
         </Select>
       </div>
 
-      <div className="min-w-[150px]">
-        <Input
-          label="Competência"
-          type="month"
-          value={competencia}
-          onChange={e => setCompetencia(e.target.value)}
-          disabled={props.disabled}
-        />
-      </div>
+      <CompetenciaMultiSelect
+        value={competencias}
+        onChange={setCompetencias}
+        disabled={props.disabled}
+        hint="Selecione uma ou mais competências"
+      />
 
       <div className="flex-1 min-w-[180px]">
         <Select
@@ -481,7 +532,7 @@ function NovaMovimentacao(props: {
         onClick={() => {
           props.onCreate({
             personId,
-            competencia: competencia.trim(),
+            competencias,
             grupo: grupo.trim(),
             valor: parsedValor ?? 0,
             observacao: observacao.trim() ? observacao.trim() : undefined,
@@ -491,8 +542,23 @@ function NovaMovimentacao(props: {
         }}
       >
         <Plus size={16} />
-        Adicionar
+        Adicionar{competencias.length > 1 ? ` (${competencias.length})` : ''}
       </Button>
+    </div>
+  );
+}
+
+/* ───────── EntryListHeader ───────── */
+
+function EntryListHeader() {
+  return (
+    <div
+      className="grid gap-3 px-4 pb-1 text-[11px] font-bold uppercase tracking-[0.6px] text-gray-400"
+      style={{ gridTemplateColumns: ENTRY_ROW_GRID }}
+    >
+      <div>Lançamento</div>
+      <div className="text-center">Conferido</div>
+      <div className="text-right">Ações</div>
     </div>
   );
 }
@@ -503,7 +569,8 @@ function PersonAccordion(props: {
   person: GroupedByPerson;
   disabled: boolean;
   onDelete: (id: string) => void;
-  onUpdate: (data: { id: string; competencia: string; grupo: string; valor: number; data?: string; observacao?: string }) => void;
+  onUpdate: (data: EntryUpdateInput) => void;
+  onToggleConferido: (entry: EntryDto, conferido: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const { person } = props;
@@ -543,6 +610,7 @@ function PersonAccordion(props: {
                 nested
                 onDelete={props.onDelete}
                 onUpdate={props.onUpdate}
+                onToggleConferido={props.onToggleConferido}
                 disabled={props.disabled}
               />
             ))}
@@ -560,7 +628,8 @@ function GroupAccordion(props: {
   nested?: boolean;
   disabled: boolean;
   onDelete: (id: string) => void;
-  onUpdate: (data: { id: string; competencia: string; grupo: string; valor: number; data?: string; observacao?: string }) => void;
+  onUpdate: (data: EntryUpdateInput) => void;
+  onToggleConferido: (entry: EntryDto, conferido: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const { group } = props;
@@ -586,12 +655,14 @@ function GroupAccordion(props: {
 
       {open && (
         <div className={['bg-white border-t border-gray-100 flex flex-col gap-2 py-3', props.nested ? 'pl-14 pr-6' : 'pl-10 pr-6'].join(' ')}>
+          <EntryListHeader />
           {group.entries.map(entry => (
             <EntryRow
               key={entry.id}
               entry={entry}
               onDelete={() => props.onDelete(entry.id)}
               onUpdate={data => props.onUpdate(data)}
+              onToggleConferido={conferido => props.onToggleConferido(entry, conferido)}
               disabled={props.disabled}
             />
           ))}
@@ -607,7 +678,8 @@ function EntryRow(props: {
   entry: EntryDto;
   disabled: boolean;
   onDelete: () => void;
-  onUpdate: (data: { id: string; competencia: string; grupo: string; valor: number; data?: string; observacao?: string }) => void;
+  onUpdate: (data: EntryUpdateInput) => void;
+  onToggleConferido: (conferido: boolean) => void;
 }) {
   const httpClient = useHttpClient();
   const groupsQuery = useQuery({ queryKey: ['groups'], queryFn: () => getGroups(httpClient) });
@@ -689,6 +761,7 @@ function EntryRow(props: {
                 valor: parsedValor ?? 0,
                 data: data || undefined,
                 observacao: observacao.trim() ? observacao.trim() : undefined,
+                conferido: props.entry.conferido,
               });
               setIsEditing(false);
             }}
@@ -704,13 +777,19 @@ function EntryRow(props: {
   }
 
   return (
-    <div className="relative bg-white border border-gray-200 rounded-lg px-4 py-3 flex items-center gap-3 group hover:border-gray-300 transition-colors">
-      <div className="flex-1 min-w-0">
+    <div
+      className="relative bg-white border border-gray-200 rounded-lg px-4 py-3 grid items-center gap-3 group hover:border-gray-300 transition-colors"
+      style={{ gridTemplateColumns: ENTRY_ROW_GRID }}
+    >
+      <div className="min-w-0">
         <div className="font-display font-semibold text-[14px] text-gray-800">
           {formatCurrencyBRL(props.entry.valor)}
         </div>
-        {(props.entry.data || props.entry.observacao) ? (
+        {(props.entry.competencia || props.entry.data || props.entry.observacao) ? (
           <div className="flex gap-2.5 mt-1 text-[12px] text-gray-500 flex-wrap">
+            {props.entry.competencia ? (
+              <span>{formatCompetenciaLabel(props.entry.competencia.slice(0, 7))}</span>
+            ) : null}
             {props.entry.data && <span>{props.entry.data}</span>}
             {props.entry.observacao && (
               <span className="truncate max-w-[260px]">{props.entry.observacao}</span>
@@ -719,7 +798,18 @@ function EntryRow(props: {
         ) : null}
       </div>
 
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex justify-center">
+        <input
+          type="checkbox"
+          checked={Boolean(props.entry.conferido)}
+          onChange={event => props.onToggleConferido(event.target.checked)}
+          disabled={props.disabled}
+          aria-label={`Marcar lançamento de ${formatCurrencyBRL(props.entry.valor)} como conferido`}
+          className="h-4 w-4 rounded border-gray-300 accent-[#006666] focus:ring-[rgba(0,102,102,0.25)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        />
+      </div>
+
+      <div className="flex items-center justify-end gap-1.5 shrink-0">
         {confirmDelete ? (
           <div className="flex items-center gap-1.5 bg-[#FFEBEE] border border-[rgba(211,47,47,0.2)] rounded-lg px-3 py-1.5">
             <span className="text-xs font-semibold text-[#B71C1C]">Excluir?</span>

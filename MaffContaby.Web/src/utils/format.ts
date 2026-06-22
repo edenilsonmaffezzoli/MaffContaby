@@ -35,6 +35,13 @@ export function formatCompetencia(date: Date) {
   return `${year}-${month}`;
 }
 
+export function formatCompetenciaLabel(competencia: string) {
+  const match = competencia.trim().match(/^(\d{4})-(\d{2})/);
+  if (!match) return competencia;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, 1);
+  return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(date);
+}
+
 export function competenciaToDateOnly(competencia: string) {
   const v = competencia.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
