@@ -19,6 +19,7 @@ export type EntryDto = {
   valor: number;
   observacao: string | null;
   data: string | null;
+  conferido: boolean;
 };
 
 export type DbSnapshotV1 = {

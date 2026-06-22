@@ -8,6 +8,7 @@ export type EntryDto = {
   valor: number;
   observacao: string | null;
   data: string | null;
+  conferido: boolean;
 };
 
 export async function getEntries(
@@ -29,7 +30,7 @@ export async function createEntry(
 export async function updateEntry(
   httpClient: AxiosInstance,
   id: string,
-  request: { competencia: string; grupo: string; valor: number; data?: string | null; observacao?: string | null },
+  request: { competencia: string; grupo: string; valor: number; data?: string | null; observacao?: string | null; conferido?: boolean },
 ) {
   await httpClient.put(`/api/entries/${id}`, request);
 }

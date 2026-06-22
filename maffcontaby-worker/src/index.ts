@@ -42,6 +42,7 @@ type EntryDto = {
   valor: number;
   observacao: string | null;
   data: string | null;
+  conferido: boolean;
 };
 
 type DbSnapshot = {
@@ -555,6 +556,7 @@ async function readDb(env: Env): Promise<DbSnapshot> {
           valores?: unknown;
           observacao?: unknown;
           data?: unknown;
+          conferido?: unknown;
         };
 
         const valoresSum =
@@ -576,6 +578,7 @@ async function readDb(env: Env): Promise<DbSnapshot> {
           valor,
           observacao: typeof e.observacao === 'string' ? e.observacao : null,
           data: typeof e.data === 'string' ? e.data : null,
+          conferido: Boolean(e.conferido),
         };
       })
       .filter(e => e.personId && e.competencia && e.grupo);
@@ -1360,6 +1363,7 @@ export default {
           valor,
           observacao: body?.observacao ?? null,
           data: body?.data ?? null,
+          conferido: Boolean(body?.conferido),
         };
         db.entries.push(entry);
         await writeDb(env, db);
@@ -1392,6 +1396,7 @@ export default {
           valor,
           observacao: body?.observacao ?? db.entries[idx].observacao ?? null,
           data: body?.data ?? db.entries[idx].data ?? null,
+          conferido: typeof body?.conferido === 'boolean' ? body.conferido : Boolean(db.entries[idx].conferido),
         };
         db.entries[idx] = updated;
         await writeDb(env, db);
