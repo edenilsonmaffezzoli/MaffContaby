@@ -117,7 +117,7 @@ function text(data: string, init?: ResponseInit) {
 function withCors(response: Response) {
   const headers = new Headers(response.headers);
   headers.set('access-control-allow-origin', '*');
-  headers.set('access-control-allow-methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  headers.set('access-control-allow-methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   headers.set('access-control-allow-headers', 'content-type,authorization');
   headers.set('access-control-max-age', '86400');
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
@@ -1371,6 +1371,35 @@ export default {
       }
 
       return withCors(methodNotAllowed());
+    }
+
+    if (path === '/api/entries/conferido') {
+      if (method !== 'PATCH') return withCors(methodNotAllowed());
+
+      const body = (await request.json().catch(() => null)) as { ids?: unknown; conferido?: unknown } | null;
+      if (!Array.isArray(body?.ids) || body.ids.length === 0) {
+        return withCors(badRequest('ids obrigatório'));
+      }
+      if (typeof body.conferido !== 'boolean') {
+        return withCors(badRequest('conferido inválido'));
+      }
+
+      const ids = new Set(
+        body.ids.filter((id): id is string => typeof id === 'string' && id.trim().length > 0),
+      );
+      if (ids.size === 0) return withCors(badRequest('ids inválido'));
+
+      const db = await readDb(env);
+      let updated = 0;
+      db.entries = db.entries.map(entry => {
+        if (!ids.has(entry.id)) return entry;
+        updated += 1;
+        return { ...entry, conferido: body.conferido };
+      });
+      if (updated === 0) return withCors(notFound());
+
+      await writeDb(env, db);
+      return withCors(json({ updated }));
     }
 
     if (path.startsWith('/api/entries/')) {
