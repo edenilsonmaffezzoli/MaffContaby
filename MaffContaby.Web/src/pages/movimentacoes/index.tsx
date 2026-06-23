@@ -13,6 +13,7 @@ import {
   createEntry,
   deleteEntry,
   getEntries,
+  updateEntriesConferido,
   updateEntry,
   type EntryDto,
 } from '@/services/entries-service';
@@ -202,18 +203,10 @@ export function MovimentacoesPage() {
 
   const toggleAllConferidoMutation = useMutation({
     mutationFn: async (input: { entries: EntryDto[]; conferido: boolean }) => {
-      await Promise.all(
-        input.entries.map(entry =>
-          updateEntry(httpClient, entry.id, {
-            competencia: entry.competencia,
-            grupo: entry.grupo,
-            valor: entry.valor,
-            data: entry.data,
-            observacao: entry.observacao,
-            conferido: input.conferido,
-          }),
-        ),
-      );
+      await updateEntriesConferido(httpClient, {
+        ids: input.entries.map(entry => entry.id),
+        conferido: input.conferido,
+      });
     },
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['entries'] }),
   });

@@ -35,6 +35,13 @@ export async function updateEntry(
   await httpClient.put(`/api/entries/${id}`, request);
 }
 
+export async function updateEntriesConferido(
+  httpClient: AxiosInstance,
+  request: { ids: string[]; conferido: boolean },
+) {
+  await httpClient.patch('/api/entries/conferido', request);
+}
+
 export async function deleteEntry(httpClient: AxiosInstance, id: string) {
   await httpClient.delete(`/api/entries/${id}`);
 }
