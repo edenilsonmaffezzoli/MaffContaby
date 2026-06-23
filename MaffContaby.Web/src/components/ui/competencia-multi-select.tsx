@@ -159,7 +159,7 @@ export function CompetenciaMultiSelect({
 
   return (
     <>
-      <div className="flex flex-col gap-1.5 min-w-[220px]">
+      <div className="flex flex-col gap-1.5 min-w-[220px] w-full max-w-sm">
         {label ? (
           <span className="text-xs font-semibold text-gray-500 tracking-[0.2px]">{label}</span>
         ) : null}
@@ -181,18 +181,24 @@ export function CompetenciaMultiSelect({
         </button>
 
         {sortedValue.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
+          <div
+            className={[
+              'flex flex-wrap content-start gap-x-2 gap-y-1.5 w-full',
+              'max-h-[6.75rem] overflow-y-auto overscroll-y-contain',
+              'rounded-md border border-gray-100 bg-gray-50/60 p-2',
+            ].join(' ')}
+          >
             {sortedValue.map(item => (
               <span
                 key={item}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary-light text-primary"
+                className="inline-flex max-w-full items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary-light text-primary shrink-0"
               >
-                {formatCompetenciaLabel(item)}
+                <span className="truncate">{formatCompetenciaLabel(item)}</span>
                 {!disabled ? (
                   <button
                     type="button"
                     onClick={() => onChange(value.filter(current => current !== item))}
-                    className="inline-flex items-center justify-center rounded-full hover:bg-[rgba(0,102,102,0.12)]"
+                    className="inline-flex shrink-0 items-center justify-center rounded-full hover:bg-[rgba(0,102,102,0.12)]"
                     aria-label={`Remover ${formatCompetenciaLabel(item)}`}
                   >
                     <X size={12} />
@@ -203,7 +209,21 @@ export function CompetenciaMultiSelect({
           </div>
         ) : null}
 
-        {hint ? <p className="text-xs text-gray-400">{hint}</p> : null}
+        {hint ? (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={openModal}
+            className={[
+              'text-xs text-left w-fit transition-colors duration-150',
+              'text-primary hover:text-[#004d4d] hover:underline underline-offset-2',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:rounded',
+              'disabled:opacity-55 disabled:cursor-not-allowed disabled:no-underline disabled:hover:text-primary',
+            ].join(' ')}
+          >
+            {hint}
+          </button>
+        ) : null}
       </div>
 
       {modalOpen
