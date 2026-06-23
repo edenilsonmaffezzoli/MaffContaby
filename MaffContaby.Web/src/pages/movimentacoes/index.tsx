@@ -29,7 +29,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type Grouped = {
   grupo: string;
@@ -136,7 +136,7 @@ export function MovimentacoesPage() {
     setSelectedGroup('');
   };
 
-  const handleConcluirNovoLancamento = () => {
+  const handleFecharNovoLancamento = () => {
     setShowNewForm(false);
     void queryClient.invalidateQueries({ queryKey: ['entries'] });
   };
@@ -200,8 +200,35 @@ export function MovimentacoesPage() {
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['entries'] }),
   });
 
+  const toggleAllConferidoMutation = useMutation({
+    mutationFn: async (input: { entries: EntryDto[]; conferido: boolean }) => {
+      await Promise.all(
+        input.entries.map(entry =>
+          updateEntry(httpClient, entry.id, {
+            competencia: entry.competencia,
+            grupo: entry.grupo,
+            valor: entry.valor,
+            data: entry.data,
+            observacao: entry.observacao,
+            conferido: input.conferido,
+          }),
+        ),
+      );
+    },
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['entries'] }),
+  });
+
+  const handleToggleAllConferido = (entries: EntryDto[]) => {
+    if (entries.length === 0) return;
+    const allChecked = entries.every(entry => entry.conferido);
+    toggleAllConferidoMutation.mutate({ entries, conferido: !allChecked });
+  };
+
   const isRowActionPending =
-    deleteEntryMutation.isPending || updateEntryMutation.isPending || toggleConferidoMutation.isPending;
+    deleteEntryMutation.isPending ||
+    updateEntryMutation.isPending ||
+    toggleConferidoMutation.isPending ||
+    toggleAllConferidoMutation.isPending;
 
   const isLoading = entriesQuery.isLoading;
   const hasData = grouped.length > 0;
@@ -347,7 +374,11 @@ export function MovimentacoesPage() {
                   <p className="text-sm text-gray-500 m-0">Os novos lançamentos aparecerão aqui para edição e exclusão.</p>
                 ) : (
                   <div className="flex flex-col gap-2 max-h-[45vh] overflow-y-auto pr-1">
-                    <EntryListHeader />
+                    <EntryListHeader
+                      entries={sessionEntries}
+                      disabled={isRowActionPending}
+                      onToggleAll={() => handleToggleAllConferido(sessionEntries)}
+                    />
                     {sessionEntries.map(entry => (
                       <EntryRow
                         key={entry.id}
@@ -362,8 +393,8 @@ export function MovimentacoesPage() {
                 )}
               </div>
               <div className="mt-5 flex justify-end border-t border-gray-100 pt-4">
-                <Button variant="primary" onClick={handleConcluirNovoLancamento}>
-                  Concluir
+                <Button variant="primary" onClick={handleFecharNovoLancamento}>
+                  Fechar
                 </Button>
               </div>
             </Card>
@@ -403,6 +434,7 @@ export function MovimentacoesPage() {
                 onDelete={id => deleteEntryMutation.mutate(id)}
                 onUpdate={data => updateEntryMutation.mutate(data)}
                 onToggleConferido={(entry, conferido) => toggleConferidoMutation.mutate({ entry, conferido })}
+                onToggleAllConferido={handleToggleAllConferido}
                 disabled={isRowActionPending}
               />
             ))}
@@ -416,6 +448,7 @@ export function MovimentacoesPage() {
                 onDelete={id => deleteEntryMutation.mutate(id)}
                 onUpdate={data => updateEntryMutation.mutate(data)}
                 onToggleConferido={(entry, conferido) => toggleConferidoMutation.mutate({ entry, conferido })}
+                onToggleAllConferido={handleToggleAllConferido}
                 disabled={isRowActionPending}
               />
             ))}
@@ -550,14 +583,43 @@ function NovaMovimentacao(props: {
 
 /* ───────── EntryListHeader ───────── */
 
-function EntryListHeader() {
+function EntryListHeader(props: {
+  entries?: EntryDto[];
+  disabled?: boolean;
+  onToggleAll?: () => void;
+}) {
+  const checkboxRef = useRef<HTMLInputElement>(null);
+  const entries = props.entries ?? [];
+  const allChecked = entries.length > 0 && entries.every(entry => entry.conferido);
+  const someChecked = entries.some(entry => entry.conferido) && !allChecked;
+
+  useEffect(() => {
+    if (checkboxRef.current) {
+      checkboxRef.current.indeterminate = someChecked;
+    }
+  }, [someChecked]);
+
   return (
     <div
       className="grid gap-3 px-4 pb-1 text-[11px] font-bold uppercase tracking-[0.6px] text-gray-400"
       style={{ gridTemplateColumns: ENTRY_ROW_GRID }}
     >
       <div>Lançamento</div>
-      <div className="text-center">Conferido</div>
+      <div className="flex flex-col items-center gap-1">
+        <span>Conferido</span>
+        {props.onToggleAll ? (
+          <input
+            ref={checkboxRef}
+            type="checkbox"
+            checked={allChecked}
+            onChange={props.onToggleAll}
+            disabled={props.disabled || entries.length === 0}
+            aria-label="Marcar ou desmarcar todos os conferidos"
+            title="Marcar/desmarcar todos"
+            className="h-4 w-4 rounded border-gray-300 accent-[#006666] focus:ring-[rgba(0,102,102,0.25)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          />
+        ) : null}
+      </div>
       <div className="text-right">Ações</div>
     </div>
   );
@@ -571,6 +633,7 @@ function PersonAccordion(props: {
   onDelete: (id: string) => void;
   onUpdate: (data: EntryUpdateInput) => void;
   onToggleConferido: (entry: EntryDto, conferido: boolean) => void;
+  onToggleAllConferido: (entries: EntryDto[]) => void;
 }) {
   const [open, setOpen] = useState(false);
   const { person } = props;
@@ -611,6 +674,7 @@ function PersonAccordion(props: {
                 onDelete={props.onDelete}
                 onUpdate={props.onUpdate}
                 onToggleConferido={props.onToggleConferido}
+                onToggleAllConferido={props.onToggleAllConferido}
                 disabled={props.disabled}
               />
             ))}
@@ -630,6 +694,7 @@ function GroupAccordion(props: {
   onDelete: (id: string) => void;
   onUpdate: (data: EntryUpdateInput) => void;
   onToggleConferido: (entry: EntryDto, conferido: boolean) => void;
+  onToggleAllConferido: (entries: EntryDto[]) => void;
 }) {
   const [open, setOpen] = useState(false);
   const { group } = props;
@@ -655,7 +720,11 @@ function GroupAccordion(props: {
 
       {open && (
         <div className={['bg-white border-t border-gray-100 flex flex-col gap-2 py-3', props.nested ? 'pl-14 pr-6' : 'pl-10 pr-6'].join(' ')}>
-          <EntryListHeader />
+          <EntryListHeader
+            entries={group.entries}
+            disabled={props.disabled}
+            onToggleAll={() => props.onToggleAllConferido(group.entries)}
+          />
           {group.entries.map(entry => (
             <EntryRow
               key={entry.id}

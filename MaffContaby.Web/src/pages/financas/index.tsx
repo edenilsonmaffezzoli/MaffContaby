@@ -106,7 +106,7 @@ export function FinancasPage() {
             <div className="grid px-4 py-2.5 bg-gray-50 border-b border-gray-100" style={{ gridTemplateColumns: '1fr 160px auto' }}>
               <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-gray-500">Item</span>
               <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-gray-500 text-right">Saldo</span>
-              <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-gray-500 text-right pr-2">Ações</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-gray-500 text-right pr-2 w-[180px]">Ações</span>
             </div>
             {assets.map(asset => (
               <AssetRow
@@ -231,6 +231,31 @@ function AssetRow(props: {
         setDisponivel(props.asset.disponivelImediatamente);
         setIsEditing(false);
       }}
+      trailing={
+        <label
+          className={[
+            'flex items-center gap-1.5 pl-2 border-l border-gray-100 ml-1',
+            props.disabled || props.isSaving ? 'opacity-55 cursor-not-allowed' : 'cursor-pointer',
+          ].join(' ')}
+          title="Disponível imediatamente"
+        >
+          <input
+            type="checkbox"
+            checked={props.asset.disponivelImediatamente}
+            onChange={e =>
+              props.onUpdate({
+                id: props.asset.id,
+                name: props.asset.name,
+                saldo: props.asset.saldo,
+                disponivelImediatamente: e.target.checked,
+              })
+            }
+            disabled={props.disabled || props.isSaving}
+            className="w-4 h-4 accent-[#006666] cursor-pointer disabled:cursor-not-allowed"
+          />
+          <span className="text-[11px] text-gray-500 whitespace-nowrap hidden sm:inline">Disp. imed.</span>
+        </label>
+      }
       editContent={
         <div className="flex flex-wrap gap-3 items-end">
           <div className="flex-1 min-w-[200px]">

@@ -15,6 +15,7 @@ interface CrudRowProps {
   canSave?: boolean;
   isSaving?: boolean;
   deleteLabel?: string;
+  trailing?: ReactNode;
 }
 
 export function CrudRow({
@@ -29,6 +30,7 @@ export function CrudRow({
   canSave,
   isSaving,
   deleteLabel = 'Excluir?',
+  trailing,
 }: CrudRowProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -95,6 +97,7 @@ export function CrudRow({
               <Trash2 size={14} />
             </button>
           )}
+          {trailing}
         </div>
       )}
     </div>
