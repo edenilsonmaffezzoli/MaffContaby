@@ -57,7 +57,7 @@ function YearSection(props: {
       <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
         <h3 className="m-0 text-sm font-semibold text-gray-800">{props.year}</h3>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-rows-6 sm:grid-flow-col gap-2 p-4">
         {MONTHS.map(month => {
           const competencia = `${props.year}-${month.value}`;
           const checked = props.selected.has(competencia);
