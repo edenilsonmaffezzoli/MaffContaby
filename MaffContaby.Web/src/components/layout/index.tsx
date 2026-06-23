@@ -36,7 +36,6 @@ const ROUTE_TITLES: Record<string, string> = {
   '/usuarios': 'Usuários',
   '/cadastro/pessoas': 'Cadastro de Pessoa',
   '/cadastro/grupos': 'Cadastro de Grupo',
-  '/cadastro/competencias': 'Cadastro de Competência',
 };
 
 function LogoMark() {
@@ -191,9 +190,6 @@ export function Layout() {
                 </NavLink>
                 <NavLink to="/cadastro/grupos" className={subNavLinkClass} onClick={closeSidebar}>
                   Cadastro de Grupo
-                </NavLink>
-                <NavLink to="/cadastro/competencias" className={subNavLinkClass} onClick={closeSidebar}>
-                  Cadastro de Competência
                 </NavLink>
               </div>
             )}
