@@ -278,7 +278,7 @@ export function Layout() {
           <span className="font-display font-bold text-base">{currentTitle}</span>
         </div>
 
-        <div className={isGdpRoute ? 'flex-1 min-h-0 flex flex-col' : 'max-w-[1140px] mx-auto px-7 py-8 pb-14 w-full lg:px-7 px-4 lg:py-8 py-5'}>
+        <div className={isGdpRoute ? 'flex-1 min-h-0 flex flex-col' : 'max-w-[1140px] mx-auto w-full px-4 py-5 pb-14 lg:px-7 lg:py-8'}>
           <Outlet />
         </div>
       </main>
