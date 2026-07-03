@@ -96,7 +96,7 @@ export function MovimentacoesPage() {
       current.entries.push(entry);
       map.set(key, current);
     }
-    return [...map.values()].sort((a, b) => b.total - a.total);
+    return [...map.values()].sort((a, b) => a.grupo.localeCompare(b.grupo, 'pt-BR', { sensitivity: 'base' }));
   }, [entriesQuery.data]);
 
   const groupedByPerson = useMemo<GroupedByPerson[]>(() => {
@@ -118,12 +118,12 @@ export function MovimentacoesPage() {
     }
     return [...map.values()]
       .map(p => {
-        const groups = [...p.groups.values()].sort((a, b) => b.total - a.total);
+        const groups = [...p.groups.values()].sort((a, b) => a.grupo.localeCompare(b.grupo, 'pt-BR', { sensitivity: 'base' }));
         const total = groups.reduce((s, g) => s + g.total, 0);
         const count = groups.reduce((s, g) => s + g.count, 0);
         return { personId: p.personId, personName: p.personName, total, count, groups };
       })
-      .sort((a, b) => b.total - a.total);
+      .sort((a, b) => a.personName.localeCompare(b.personName, 'pt-BR', { sensitivity: 'base' }));
   }, [entriesQuery.data, isAllPeople, peopleQuery.data]);
 
   const total = useMemo(() => grouped.reduce((sum, g) => sum + g.total, 0), [grouped]);
@@ -338,7 +338,7 @@ export function MovimentacoesPage() {
 
       {/* New entry modal */}
       {showNewForm && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px] p-3 sm:p-4 md:p-8 overflow-y-auto">
+        <div className="fixed inset-0 z-[65] bg-black/40 backdrop-blur-[1px] p-3 sm:p-4 md:p-8 overflow-y-auto">
           <div className="max-w-6xl mx-auto min-w-0">
             <Card noPad className="p-4 sm:p-6 overflow-hidden">
               <CardHeader
