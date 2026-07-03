@@ -25,6 +25,7 @@ interface CompetenciaMultiSelectProps {
   onChange: (value: string[]) => void;
   disabled?: boolean;
   hint?: string;
+  className?: string;
 }
 
 function sortCompetencias(values: string[]) {
@@ -97,6 +98,7 @@ export function CompetenciaMultiSelect({
   onChange,
   disabled = false,
   hint,
+  className = '',
 }: CompetenciaMultiSelectProps) {
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const sortedValue = useMemo(() => sortCompetencias(value), [value]);
@@ -159,7 +161,7 @@ export function CompetenciaMultiSelect({
 
   return (
     <>
-      <div className="flex flex-col gap-1.5 min-w-[220px] w-full max-w-sm">
+      <div className={['flex flex-col gap-1.5 w-full min-w-0 sm:min-w-[220px] sm:max-w-sm', className].join(' ')}>
         {label ? (
           <span className="text-xs font-semibold text-gray-500 tracking-[0.2px]">{label}</span>
         ) : null}

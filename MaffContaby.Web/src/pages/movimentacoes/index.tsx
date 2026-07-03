@@ -47,7 +47,7 @@ type GroupedByPerson = {
   groups: Grouped[];
 };
 
-const ENTRY_ROW_GRID = '1fr 110px 72px';
+const ENTRY_ROW_GRID_CLASS = 'sm:grid sm:grid-cols-[1fr_110px_72px]';
 
 type EntryUpdateInput = {
   id: string;
@@ -277,8 +277,8 @@ export function MovimentacoesPage() {
       {/* Filters */}
       <Card>
         <CardHeader title="Filtros" />
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="min-w-[160px] flex-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_160px_1fr_auto_auto] gap-3 items-end">
+          <div className="w-full min-w-0">
             <Select
               label="Pessoa"
               value={selectedPersonId}
@@ -291,7 +291,7 @@ export function MovimentacoesPage() {
               ))}
             </Select>
           </div>
-          <div className="min-w-[160px]">
+          <div className="w-full min-w-0">
             <Input
               label="Competência"
               type="month"
@@ -300,7 +300,7 @@ export function MovimentacoesPage() {
               disabled={!selectedPersonId}
             />
           </div>
-          <div className="min-w-[160px] flex-1">
+          <div className="w-full min-w-0">
             <Select
               label="Grupo"
               value={selectedGroup}
@@ -313,30 +313,34 @@ export function MovimentacoesPage() {
               ))}
             </Select>
           </div>
-          <Button
-            variant="default"
-            onClick={() => entriesQuery.refetch()}
-            disabled={!selectedPersonId || entriesQuery.isFetching}
-            loading={entriesQuery.isFetching}
-          >
-            <RefreshCw size={15} />
-            Atualizar
-          </Button>
-          <Button
-            variant="default"
-            onClick={handleClearFilters}
-            disabled={!canClearFilters}
-          >
-            Limpar
-          </Button>
+          <div className="flex gap-2 w-full sm:w-auto col-span-1 sm:col-span-2 lg:col-span-1">
+            <Button
+              variant="default"
+              className="flex-1 sm:flex-none"
+              onClick={() => entriesQuery.refetch()}
+              disabled={!selectedPersonId || entriesQuery.isFetching}
+              loading={entriesQuery.isFetching}
+            >
+              <RefreshCw size={15} />
+              Atualizar
+            </Button>
+            <Button
+              variant="default"
+              className="flex-1 sm:flex-none"
+              onClick={handleClearFilters}
+              disabled={!canClearFilters}
+            >
+              Limpar
+            </Button>
+          </div>
         </div>
       </Card>
 
       {/* New entry modal */}
       {showNewForm && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px] p-4 md:p-8 overflow-y-auto">
-          <div className="max-w-6xl mx-auto">
-            <Card>
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px] p-3 sm:p-4 md:p-8 overflow-y-auto">
+          <div className="max-w-6xl mx-auto min-w-0">
+            <Card noPad className="p-4 sm:p-6 overflow-hidden">
               <CardHeader
                 title="Novo Lançamento"
                 action={
@@ -366,7 +370,7 @@ export function MovimentacoesPage() {
                 {sessionEntries.length === 0 ? (
                   <p className="text-sm text-gray-500 m-0">Os novos lançamentos aparecerão aqui para edição e exclusão.</p>
                 ) : (
-                  <div className="flex flex-col gap-2 max-h-[45vh] overflow-y-auto pr-1">
+                  <div className="flex flex-col gap-2 max-h-[35vh] sm:max-h-[45vh] overflow-y-auto overflow-x-hidden pr-1">
                     <EntryListHeader
                       entries={sessionEntries}
                       disabled={isRowActionPending}
@@ -385,8 +389,8 @@ export function MovimentacoesPage() {
                   </div>
                 )}
               </div>
-              <div className="mt-5 flex justify-end border-t border-gray-100 pt-4">
-                <Button variant="primary" onClick={handleFecharNovoLancamento}>
+              <div className="mt-5 flex justify-stretch sm:justify-end border-t border-gray-100 pt-4">
+                <Button variant="primary" className="w-full sm:w-auto" onClick={handleFecharNovoLancamento}>
                   Fechar
                 </Button>
               </div>
@@ -397,7 +401,7 @@ export function MovimentacoesPage() {
 
       {/* Entries list */}
       <Card noPad>
-        <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100">
           <h2 className="text-[15px] font-semibold text-gray-800 m-0">Lançamentos</h2>
           {!isLoading && hasData ? (
             <Badge variant="info">{totalLancamentos} {totalLancamentos === 1 ? 'item' : 'itens'}</Badge>
@@ -481,95 +485,101 @@ function NovaMovimentacao(props: {
     parsedValor > 0;
 
   return (
-    <div className="flex flex-wrap gap-3 items-end">
-      <div className="min-w-[160px]">
-        <Select
-          label="Pessoa"
-          value={personId}
-          onChange={e => setPersonId(e.target.value)}
-          disabled={props.disabled || props.isPeopleLoading || props.people.length === 0}
-        >
-          <option value="">
-            {props.isPeopleLoading
-              ? 'Carregando…'
-              : props.people.length === 0
-                ? 'Cadastre pessoas primeiro'
-                : 'Selecione…'}
-          </option>
-          {props.people.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </Select>
-      </div>
-
+    <div className="flex flex-col gap-3">
       <CompetenciaMultiSelect
         value={competencias}
         onChange={setCompetencias}
         disabled={props.disabled}
         hint="Clique para abrir a seleção por ano"
+        className="sm:max-w-none"
       />
 
-      <div className="flex-1 min-w-[180px]">
-        <Select
-          label="Grupo"
-          value={grupo}
-          onChange={e => setGrupo(e.target.value)}
-          disabled={props.disabled || props.isGroupsLoading || props.groups.length === 0}
-          hint={!props.isGroupsLoading && props.groups.length === 0 ? 'Cadastre grupos primeiro' : undefined}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-end">
+        <div className="w-full min-w-0">
+          <Select
+            label="Pessoa"
+            value={personId}
+            onChange={e => setPersonId(e.target.value)}
+            disabled={props.disabled || props.isPeopleLoading || props.people.length === 0}
+          >
+            <option value="">
+              {props.isPeopleLoading
+                ? 'Carregando…'
+                : props.people.length === 0
+                  ? 'Cadastre pessoas primeiro'
+                  : 'Selecione…'}
+            </option>
+            {props.people.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </Select>
+        </div>
+
+        <div className="w-full min-w-0">
+          <Select
+            label="Grupo"
+            value={grupo}
+            onChange={e => setGrupo(e.target.value)}
+            disabled={props.disabled || props.isGroupsLoading || props.groups.length === 0}
+            hint={!props.isGroupsLoading && props.groups.length === 0 ? 'Cadastre grupos primeiro' : undefined}
+          >
+            <option value="">
+              {props.isGroupsLoading
+                ? 'Carregando…'
+                : props.groups.length === 0
+                  ? 'Cadastre grupos primeiro'
+                  : 'Selecione…'}
+            </option>
+            {props.groups.map(g => (
+              <option key={g.id} value={g.name}>{g.name}</option>
+            ))}
+          </Select>
+        </div>
+
+        <div className="w-full min-w-0">
+          <Input
+            label="Valor (R$)"
+            inputMode="decimal"
+            placeholder="0,00"
+            value={valor}
+            onChange={e => setValor(e.target.value)}
+            disabled={props.disabled}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+        <div className="flex-1 min-w-0 w-full">
+          <Input
+            label="Observação"
+            placeholder="Opcional"
+            value={observacao}
+            onChange={e => setObservacao(e.target.value)}
+            disabled={props.disabled}
+          />
+        </div>
+
+        <Button
+          variant="primary"
+          className="w-full sm:w-auto shrink-0"
+          loading={props.disabled}
+          disabled={!canSubmit}
+          onClick={() => {
+            props.onCreate({
+              personId,
+              competencias,
+              grupo: grupo.trim(),
+              valor: parsedValor ?? 0,
+              observacao: observacao.trim() ? observacao.trim() : undefined,
+            });
+            setValor('');
+            setObservacao('');
+          }}
         >
-          <option value="">
-            {props.isGroupsLoading
-              ? 'Carregando…'
-              : props.groups.length === 0
-                ? 'Cadastre grupos primeiro'
-                : 'Selecione…'}
-          </option>
-          {props.groups.map(g => (
-            <option key={g.id} value={g.name}>{g.name}</option>
-          ))}
-        </Select>
+          <Plus size={16} />
+          Adicionar{competencias.length > 1 ? ` (${competencias.length})` : ''}
+        </Button>
       </div>
-
-      <div className="min-w-[120px]">
-        <Input
-          label="Valor (R$)"
-          inputMode="decimal"
-          placeholder="0,00"
-          value={valor}
-          onChange={e => setValor(e.target.value)}
-          disabled={props.disabled}
-        />
-      </div>
-
-      <div className="flex-1 min-w-[180px]">
-        <Input
-          label="Observação"
-          placeholder="Opcional"
-          value={observacao}
-          onChange={e => setObservacao(e.target.value)}
-          disabled={props.disabled}
-        />
-      </div>
-
-      <Button
-        variant="primary"
-        loading={props.disabled}
-        disabled={!canSubmit}
-        onClick={() => {
-          props.onCreate({
-            personId,
-            competencias,
-            grupo: grupo.trim(),
-            valor: parsedValor ?? 0,
-            observacao: observacao.trim() ? observacao.trim() : undefined,
-          });
-          setValor('');
-          setObservacao('');
-        }}
-      >
-        <Plus size={16} />
-        Adicionar{competencias.length > 1 ? ` (${competencias.length})` : ''}
-      </Button>
     </div>
   );
 }
@@ -594,8 +604,10 @@ function EntryListHeader(props: {
 
   return (
     <div
-      className="grid gap-3 px-4 pb-1 text-[11px] font-bold uppercase tracking-[0.6px] text-gray-400"
-      style={{ gridTemplateColumns: ENTRY_ROW_GRID }}
+      className={[
+        'hidden gap-3 px-4 pb-1 text-[11px] font-bold uppercase tracking-[0.6px] text-gray-400',
+        ENTRY_ROW_GRID_CLASS,
+      ].join(' ')}
     >
       <div>Lançamento</div>
       <div className="flex flex-col items-center gap-1">
@@ -636,7 +648,7 @@ function PersonAccordion(props: {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 px-6 py-4 hover:bg-gray-50 transition-colors text-left"
+        className="w-full flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors text-left"
       >
         <ChevronDown
           size={16}
@@ -652,8 +664,7 @@ function PersonAccordion(props: {
       {open && (
         <div className="bg-gray-50 border-t border-gray-100">
           {/* Sub-header */}
-          <div className="grid gap-3 px-10 py-2.5 text-[11px] font-bold uppercase tracking-[0.6px] text-gray-400"
-            style={{ gridTemplateColumns: '1fr 70px 150px' }}>
+          <div className="hidden sm:grid gap-3 px-6 sm:px-10 py-2.5 text-[11px] font-bold uppercase tracking-[0.6px] text-gray-400 sm:grid-cols-[1fr_70px_150px]">
             <div>Grupo</div>
             <div className="text-right">Itens</div>
             <div className="text-right">Total</div>
@@ -691,14 +702,14 @@ function GroupAccordion(props: {
 }) {
   const [open, setOpen] = useState(false);
   const { group } = props;
-  const indentClass = props.nested ? 'pl-10' : 'pl-6';
+  const indentClass = props.nested ? 'pl-6 sm:pl-10' : 'pl-4 sm:pl-6';
 
   return (
     <div>
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className={['w-full flex items-center gap-3 pr-6 py-3.5 hover:bg-gray-50 transition-colors text-left', indentClass].join(' ')}
+        className={['w-full flex items-center gap-2 sm:gap-3 pr-4 sm:pr-6 py-3.5 hover:bg-gray-50 transition-colors text-left', indentClass].join(' ')}
       >
         <ChevronDown
           size={16}
@@ -706,13 +717,13 @@ function GroupAccordion(props: {
         />
         <span className="flex-1 font-semibold text-sm text-gray-700 truncate">{group.grupo}</span>
         <Badge variant="neutral">{group.count}</Badge>
-        <span className="font-bold text-sm text-gray-800 font-display ml-2 shrink-0 w-[140px] text-right">
+        <span className="font-bold text-sm text-gray-800 font-display ml-1 sm:ml-2 shrink-0 min-w-0 sm:w-[140px] text-right">
           {formatCurrencyBRL(group.total)}
         </span>
       </button>
 
       {open && (
-        <div className={['bg-white border-t border-gray-100 flex flex-col gap-2 py-3', props.nested ? 'pl-14 pr-6' : 'pl-10 pr-6'].join(' ')}>
+        <div className={['bg-white border-t border-gray-100 flex flex-col gap-2 py-3', props.nested ? 'pl-6 pr-4 sm:pl-14 sm:pr-6' : 'pl-4 pr-4 sm:pl-10 sm:pr-6'].join(' ')}>
           <EntryListHeader
             entries={group.entries}
             disabled={props.disabled}
@@ -765,9 +776,9 @@ function EntryRow(props: {
 
   if (isEditing) {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[150px]">
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+          <div className="w-full min-w-0 sm:col-span-2 lg:col-span-1">
             <label className="block text-xs font-semibold text-gray-500 mb-1.5">Grupo</label>
             <select
               className="h-9 pl-3 pr-8 rounded border border-gray-200 bg-white text-sm w-full outline-none focus:border-[#006666] focus:shadow-[0_0_0_3px_rgba(0,102,102,0.10)] appearance-none"
@@ -780,7 +791,7 @@ function EntryRow(props: {
               ))}
             </select>
           </div>
-          <div className="min-w-[110px]">
+          <div className="w-full min-w-0">
             <label className="block text-xs font-semibold text-gray-500 mb-1.5">Valor</label>
             <input
               className="h-9 px-3 rounded border border-gray-200 bg-white text-sm w-full outline-none focus:border-[#006666] focus:shadow-[0_0_0_3px_rgba(0,102,102,0.10)]"
@@ -789,7 +800,7 @@ function EntryRow(props: {
               disabled={props.disabled}
             />
           </div>
-          <div className="min-w-[140px]">
+          <div className="w-full min-w-0">
             <label className="block text-xs font-semibold text-gray-500 mb-1.5">Data</label>
             <input
               type="date"
@@ -799,7 +810,7 @@ function EntryRow(props: {
               disabled={props.disabled}
             />
           </div>
-          <div className="flex-1 min-w-[180px]">
+          <div className="w-full min-w-0 sm:col-span-2 lg:col-span-4">
             <label className="block text-xs font-semibold text-gray-500 mb-1.5">Observação</label>
             <input
               className="h-9 px-3 rounded border border-gray-200 bg-white text-sm w-full outline-none focus:border-[#006666] focus:shadow-[0_0_0_3px_rgba(0,102,102,0.10)]"
@@ -809,10 +820,11 @@ function EntryRow(props: {
             />
           </div>
         </div>
-        <div className="flex gap-2 mt-3">
+        <div className="flex flex-col sm:flex-row gap-2 mt-3">
           <Button
             variant="primary"
             size="sm"
+            className="w-full sm:w-auto"
             loading={props.disabled}
             disabled={!grupo.trim() || parsedValor === null || parsedValor <= 0}
             onClick={() => {
@@ -830,7 +842,7 @@ function EntryRow(props: {
           >
             Salvar
           </Button>
-          <Button variant="default" size="sm" onClick={() => setIsEditing(false)} disabled={props.disabled}>
+          <Button variant="default" size="sm" className="w-full sm:w-auto" onClick={() => setIsEditing(false)} disabled={props.disabled}>
             Cancelar
           </Button>
         </div>
@@ -838,80 +850,110 @@ function EntryRow(props: {
     );
   }
 
+  const entryMeta = (props.entry.competencia || props.entry.data || props.entry.observacao) ? (
+    <div className="flex gap-2.5 mt-1 text-[12px] text-gray-500 flex-wrap">
+      {props.entry.competencia ? (
+        <span>{formatCompetenciaLabel(props.entry.competencia.slice(0, 7))}</span>
+      ) : null}
+      {props.entry.data && <span>{props.entry.data}</span>}
+      {props.entry.observacao && (
+        <span className="break-words sm:truncate sm:max-w-[260px]">{props.entry.observacao}</span>
+      )}
+    </div>
+  ) : null;
+
+  const actionButtons = confirmDelete ? (
+    <div className="flex items-center gap-1.5 bg-[#FFEBEE] border border-[rgba(211,47,47,0.2)] rounded-lg px-3 py-1.5">
+      <span className="text-xs font-semibold text-[#B71C1C]">Excluir?</span>
+      <button
+        type="button"
+        onClick={() => { props.onDelete(); setConfirmDelete(false); }}
+        className="text-[11px] font-bold text-[#D32F2F] hover:text-[#B71C1C] transition-colors px-1"
+      >
+        Sim
+      </button>
+      <button
+        type="button"
+        onClick={() => setConfirmDelete(false)}
+        className="text-[11px] font-bold text-gray-500 hover:text-gray-700 transition-colors px-1"
+      >
+        Não
+      </button>
+    </div>
+  ) : (
+    <>
+      <button
+        type="button"
+        onClick={() => setIsEditing(true)}
+        disabled={props.disabled}
+        className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Editar"
+      >
+        <Pencil size={14} />
+      </button>
+      <button
+        type="button"
+        onClick={() => setConfirmDelete(true)}
+        disabled={props.disabled}
+        className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-[#FFEBEE] hover:text-[#D32F2F] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Excluir"
+      >
+        <Trash2 size={14} />
+      </button>
+    </>
+  );
+
   return (
-    <div
-      className="relative bg-white border border-gray-200 rounded-lg px-4 py-3 grid items-center gap-3 group hover:border-gray-300 transition-colors"
-      style={{ gridTemplateColumns: ENTRY_ROW_GRID }}
-    >
-      <div className="min-w-0">
-        <div className="font-display font-semibold text-[14px] text-gray-800">
-          {formatCurrencyBRL(props.entry.valor)}
+    <div className="relative bg-white border border-gray-200 rounded-lg px-3 sm:px-4 py-3 group hover:border-gray-300 transition-colors overflow-hidden">
+      {/* Mobile layout */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        <div className="min-w-0">
+          <div className="font-display font-semibold text-[14px] text-gray-800">
+            {formatCurrencyBRL(props.entry.valor)}
+          </div>
+          {entryMeta}
         </div>
-        {(props.entry.competencia || props.entry.data || props.entry.observacao) ? (
-          <div className="flex gap-2.5 mt-1 text-[12px] text-gray-500 flex-wrap">
-            {props.entry.competencia ? (
-              <span>{formatCompetenciaLabel(props.entry.competencia.slice(0, 7))}</span>
-            ) : null}
-            {props.entry.data && <span>{props.entry.data}</span>}
-            {props.entry.observacao && (
-              <span className="truncate max-w-[260px]">{props.entry.observacao}</span>
-            )}
+        <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
+          <label className="flex items-center gap-2 text-xs font-semibold text-gray-500 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={Boolean(props.entry.conferido)}
+              onChange={event => props.onToggleConferido(event.target.checked)}
+              disabled={props.disabled}
+              aria-label={`Marcar lançamento de ${formatCurrencyBRL(props.entry.valor)} como conferido`}
+              className="h-4 w-4 rounded border-gray-300 accent-[#006666] focus:ring-[rgba(0,102,102,0.25)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            />
+            Conferido
+          </label>
+          <div className="flex items-center justify-end gap-1.5 shrink-0">
+            {actionButtons}
           </div>
-        ) : null}
+        </div>
       </div>
 
-      <div className="flex justify-center">
-        <input
-          type="checkbox"
-          checked={Boolean(props.entry.conferido)}
-          onChange={event => props.onToggleConferido(event.target.checked)}
-          disabled={props.disabled}
-          aria-label={`Marcar lançamento de ${formatCurrencyBRL(props.entry.valor)} como conferido`}
-          className="h-4 w-4 rounded border-gray-300 accent-[#006666] focus:ring-[rgba(0,102,102,0.25)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-        />
-      </div>
-
-      <div className="flex items-center justify-end gap-1.5 shrink-0">
-        {confirmDelete ? (
-          <div className="flex items-center gap-1.5 bg-[#FFEBEE] border border-[rgba(211,47,47,0.2)] rounded-lg px-3 py-1.5">
-            <span className="text-xs font-semibold text-[#B71C1C]">Excluir?</span>
-            <button
-              type="button"
-              onClick={() => { props.onDelete(); setConfirmDelete(false); }}
-              className="text-[11px] font-bold text-[#D32F2F] hover:text-[#B71C1C] transition-colors px-1"
-            >
-              Sim
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(false)}
-              className="text-[11px] font-bold text-gray-500 hover:text-gray-700 transition-colors px-1"
-            >
-              Não
-            </button>
+      {/* Desktop layout */}
+      <div className={['hidden items-center gap-3', ENTRY_ROW_GRID_CLASS].join(' ')}>
+        <div className="min-w-0">
+          <div className="font-display font-semibold text-[14px] text-gray-800">
+            {formatCurrencyBRL(props.entry.valor)}
           </div>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => setIsEditing(true)}
-              disabled={props.disabled}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Editar"
-            >
-              <Pencil size={14} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(true)}
-              disabled={props.disabled}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-[#FFEBEE] hover:text-[#D32F2F] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Excluir"
-            >
-              <Trash2 size={14} />
-            </button>
-          </>
-        )}
+          {entryMeta}
+        </div>
+
+        <div className="flex justify-center">
+          <input
+            type="checkbox"
+            checked={Boolean(props.entry.conferido)}
+            onChange={event => props.onToggleConferido(event.target.checked)}
+            disabled={props.disabled}
+            aria-label={`Marcar lançamento de ${formatCurrencyBRL(props.entry.valor)} como conferido`}
+            className="h-4 w-4 rounded border-gray-300 accent-[#006666] focus:ring-[rgba(0,102,102,0.25)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          />
+        </div>
+
+        <div className="flex items-center justify-end gap-1.5 shrink-0">
+          {actionButtons}
+        </div>
       </div>
     </div>
   );
