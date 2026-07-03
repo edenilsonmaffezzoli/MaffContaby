@@ -135,7 +135,7 @@ export function MovimentacoesPage() {
     setSelectedPersonId('__all__');
     setCompetencia(currentMonthCompetencia);
     setSelectedGroup('');
-  };
+  }; 
 
   const handleFecharNovoLancamento = () => {
     setShowNewForm(false);
