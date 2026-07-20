@@ -12,7 +12,7 @@ import { createAsset, deleteAsset, getAssets, updateAsset, type AssetDto } from 
 import { formatCurrencyBRL, parseDecimalBRL } from '@/utils/format';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Plus, Wallet } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 export function FinancasPage() {
   const httpClient = useHttpClient();
@@ -50,7 +50,13 @@ export function FinancasPage() {
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['assets'] }),
   });
 
-  const assets = assetsQuery.data ?? [];
+  const assets = useMemo(
+    () =>
+      [...(assetsQuery.data ?? [])].sort((a, b) =>
+        a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }),
+      ),
+    [assetsQuery.data],
+  );
   const totalAtual = assets.reduce((sum, a) => sum + a.saldo, 0);
   const totalDisponivel = assets.reduce((sum, a) => sum + (a.disponivelImediatamente ? a.saldo : 0), 0);
   const totalBloqueado = totalAtual - totalDisponivel;
