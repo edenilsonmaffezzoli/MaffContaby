@@ -62,6 +62,14 @@ Nunca inclua senhas reais nos casos CSV. Use placeholders genéricos (ex.: usuar
           .map(f => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
           .join('\n\n');
 
+  const csvOutputOverride = `SAÍDA OBRIGATÓRIA NESTE SISTEMA (prevalece sobre qualquer outra instrução)
+Você está gerando casos dentro do MaffContaby. A análise funcional deve ser feita em silêncio.
+NÃO crie pastas. NÃO grave arquivos. NÃO escreva inventario-funcional.md. NÃO use XML. NÃO explique o plano. NÃO mencione conflito de instruções. NÃO crie documentacao-testes-qase nem qualquer .csv/.md em disco.
+Ignore pedidos de salvar arquivos no projeto, no Cursor ou no computador.
+A ÚNICA resposta permitida é um único CSV. A primeira linha deve ser exatamente:
+${AI_QASE_CSV_HEADER}
+Sem texto antes, sem texto depois, sem markdown, sem blocos de código.`;
+
   const executionContext = `## CONTEXTO DESTA EXECUÇÃO (use apenas para análise — não cite detalhes técnicos nos casos)
 
 - Path do sistema (URL, módulo ou rota): ${systemPath}
@@ -77,11 +85,17 @@ ${codeBlock}
 
 ---
 
-Lembrete final: a primeira linha da resposta deve ser exatamente o cabeçalho ${AI_QASE_CSV_HEADER}. Retorne somente o CSV, sem nenhum texto antes ou depois.`;
+${csvOutputOverride}`;
 
   const trimmedCustom = customInstructions?.trim();
   if (trimmedCustom) {
-    return `${trimmedCustom}
+    return `${csvOutputOverride}
+
+---
+
+INSTRUÇÕES DE ANÁLISE (conteúdo e regras de negócio — a forma de saída continua sendo só o CSV acima)
+
+${trimmedCustom}
 
 ---
 

@@ -1,6 +1,10 @@
 # Prompt — Casos de teste Zenya (CSV Qase / padrão MaffContaby)
 
-Prompt para usar em outra IA. A análise funcional da Zenya permanece; a saída é **CSV** no mesmo padrão que o MaffContaby gera hoje (`Suite,Subsuite,Title,Description,Preconditions,Steps,Expected Result,Priority,Tags`), não XML.
+Use este texto no **Cadastro de Prompt** do MaffContaby (recomendado) ou em outra IA.
+
+No MaffContaby a resposta deve ser **somente um CSV** — o sistema já exporta para o Qase. Não peça para criar pastas nem arquivos.
+
+Cabeçalho obrigatório: `Suite,Subsuite,Title,Description,Preconditions,Steps,Expected Result,Priority,Tags`
 
 Copie a partir de `# OBJETIVO`.
 
@@ -689,6 +693,18 @@ Resultado esperado: O sistema redireciona para a tela inicial autenticada e exib
 # 21. ARQUIVOS DE SAÍDA
 ==================================================
 
+SE ESTE PROMPT FOR USADO NO MAFFCONTABY (Cadastro de Prompt + Gerar Casos de Teste):
+
+- NÃO criar pastas
+- NÃO gravar arquivos no disco
+- NÃO criar documentacao-testes-qase
+- NÃO criar inventario-funcional.md
+- A resposta inteira deve ser UM único CSV com o cabeçalho:
+  Suite,Subsuite,Title,Description,Preconditions,Steps,Expected Result,Priority,Tags
+- O MaffContaby já salva e exporta o CSV para o Qase
+
+SE ESTE PROMPT FOR USADO EM OUTRA IA / CHAT DO CURSOR (fora do MaffContaby):
+
 Criar os arquivos na pasta do projeto ATUAL que estiver aberta no Cursor.
 
 NÃO utilizar caminhos específicos de outros projetos.
@@ -737,7 +753,9 @@ Caso o sistema possua poucos módulos, pode ser utilizado um único CSV.
 # 22. INVENTÁRIO FUNCIONAL
 ==================================================
 
-Criar também:
+No MaffContaby: NÃO gerar arquivo de inventário. A análise fica só na cabeça; a resposta é só o CSV.
+
+Fora do MaffContaby, criar também:
 
 documentacao-testes-qase/inventario-funcional.md
 
@@ -924,4 +942,6 @@ A pergunta principal para cada caso deve ser:
 
 "Se eu fosse um usuário utilizando a Zenya, o que eu faria e o que esperaria que acontecesse?"
 
-Somente gerar os CSVs após concluir o levantamento funcional da Zenya.
+No MaffContaby: faça o levantamento em silêncio e responda só com o CSV (um único arquivo lógico, sem prosa).
+
+Fora do MaffContaby: somente gravar os CSVs em disco após concluir o levantamento funcional da Zenya.
