@@ -177,6 +177,35 @@ export async function createAgentRun(
   return { agentId, runId };
 }
 
+function extractTextFromUnknown(value: unknown): string {
+  if (typeof value === 'string' && value.trim()) return value;
+  if (!value || typeof value !== 'object') return '';
+  const o = value as Record<string, unknown>;
+  if (typeof o.text === 'string' && o.text.trim()) return o.text;
+  if (typeof o.result === 'string' && o.result.trim()) return o.result;
+  if (typeof o.delta === 'string' && o.delta.trim()) return o.delta;
+  if (o.result && typeof o.result === 'object') {
+    const nested = extractTextFromUnknown(o.result);
+    if (nested) return nested;
+  }
+  const message = o.message;
+  if (message && typeof message === 'object') {
+    const content = (message as { content?: unknown }).content;
+    if (Array.isArray(content)) {
+      const joined = content
+        .map(block => {
+          if (!block || typeof block !== 'object') return '';
+          const b = block as { type?: unknown; text?: unknown };
+          if (b.type === 'text' && typeof b.text === 'string') return b.text;
+          return '';
+        })
+        .join('');
+      if (joined.trim()) return joined;
+    }
+  }
+  return '';
+}
+
 export async function getRun(
   config: CursorConfig,
   agentId: string,
@@ -189,11 +218,13 @@ export async function getRun(
 
   const data = (await parseJsonResponse(res, 'get run')) as {
     status?: CursorRunStatus;
-    result?: string;
+    result?: unknown;
+    text?: unknown;
   };
 
   const status = data.status ?? 'RUNNING';
-  return { status, result: typeof data.result === 'string' ? data.result : undefined };
+  const result = extractTextFromUnknown(data.result) || extractTextFromUnknown(data.text) || undefined;
+  return { status, result: result || undefined };
 }
 
 export async function deleteAgent(config: CursorConfig, agentId: string): Promise<void> {
@@ -210,6 +241,16 @@ export async function deleteAgent(config: CursorConfig, agentId: string): Promis
   }
 }
 
+function appendAssistantText(
+  state: { assistantText: string },
+  chunk: string,
+  onProgress?: CursorProgressCallback,
+): void {
+  if (!chunk) return;
+  state.assistantText += chunk;
+  onProgress?.({ type: 'delta', chars: state.assistantText.length });
+}
+
 function handleSseEvent(
   evt: SseEvent,
   state: {
@@ -220,7 +261,9 @@ function handleSseEvent(
   },
   onProgress?: CursorProgressCallback,
 ): void {
-  if (evt.event === 'status') {
+  const eventName = evt.event || 'message';
+
+  if (eventName === 'status') {
     const payload = parseJsonData<{ status?: CursorRunStatus }>(evt.data);
     if (payload?.status) {
       state.lastStatus = payload.status;
@@ -229,29 +272,53 @@ function handleSseEvent(
     return;
   }
 
-  if (evt.event === 'assistant') {
-    const payload = parseJsonData<{ text?: string }>(evt.data);
-    if (payload?.text) {
-      state.assistantText += payload.text;
-      onProgress?.({ type: 'delta', chars: state.assistantText.length });
-    }
+  if (eventName === 'assistant') {
+    const payload = parseJsonData<unknown>(evt.data);
+    const chunk = extractTextFromUnknown(payload);
+    if (chunk) appendAssistantText(state, chunk, onProgress);
     return;
   }
 
-  if (evt.event === 'result') {
-    const payload = parseJsonData<{ status?: CursorRunStatus; text?: string }>(evt.data);
-    const status = payload?.status ?? state.lastStatus;
-    const text = (payload?.text ?? state.assistantText).trim();
-    if (TERMINAL_STATUSES.has(status)) {
-      state.terminal = { status, text };
+  if (eventName === 'message') {
+    const payload = parseJsonData<unknown>(evt.data);
+    const typed = payload && typeof payload === 'object' ? (payload as { type?: unknown }) : null;
+    if (typeof typed?.type === 'string' && typed.type !== 'message') {
+      handleSseEvent({ event: typed.type, data: evt.data }, state, onProgress);
+      return;
+    }
+    const chunk = extractTextFromUnknown(payload);
+    if (chunk) appendAssistantText(state, chunk, onProgress);
+    return;
+  }
+
+  if (eventName === 'interaction_update') {
+    const payload = parseJsonData<unknown>(evt.data);
+    const chunk = extractTextFromUnknown(payload);
+    if (chunk) appendAssistantText(state, chunk, onProgress);
+    return;
+  }
+
+  if (eventName === 'result') {
+    const payload = parseJsonData<{ status?: CursorRunStatus }>(evt.data);
+    const status = payload?.status && TERMINAL_STATUSES.has(payload.status) ? payload.status : 'FINISHED';
+    const text = (extractTextFromUnknown(payload) || state.assistantText).trim();
+    state.terminal = { status, text };
+    state.lastStatus = status;
+    return;
+  }
+
+  if (eventName === 'done') {
+    if (!state.terminal) {
+      const status = TERMINAL_STATUSES.has(state.lastStatus) ? state.lastStatus : 'FINISHED';
+      state.terminal = { status, text: state.assistantText.trim() };
       state.lastStatus = status;
     }
     return;
   }
 
-  if (evt.event === 'error') {
-    const payload = parseJsonData<{ message?: string }>(evt.data);
-    throw new Error(payload?.message?.trim() || 'Erro no stream do Cursor');
+  if (eventName === 'error') {
+    const payload = parseJsonData<{ message?: string; error?: string }>(evt.data);
+    throw new Error(payload?.message?.trim() || payload?.error?.trim() || 'Erro no stream do Cursor');
   }
 }
 
@@ -299,6 +366,17 @@ export async function streamRunUntilDone(
   const decoder = new TextDecoder();
   let buffer = '';
 
+  const consumeEvents = (events: SseEvent[]): { status: CursorRunStatus; result?: string } | null => {
+    for (const evt of events) {
+      handleSseEvent(evt, state, onProgress);
+      if (state.terminal) {
+        assertTerminalStatus(state.terminal.status);
+        return { status: state.terminal.status, result: state.terminal.text };
+      }
+    }
+    return null;
+  };
+
   try {
     while (Date.now() < deadlineMs) {
       const { done, value } = await reader.read();
@@ -307,13 +385,10 @@ export async function streamRunUntilDone(
 
       const parsed = parseSseChunk(buffer);
       buffer = parsed.rest;
-      for (const evt of parsed.events) {
-        handleSseEvent(evt, state, onProgress);
-        if (state.terminal) {
-          await reader.cancel().catch(() => undefined);
-          assertTerminalStatus(state.terminal.status);
-          return { status: state.terminal.status, result: state.terminal.text };
-        }
+      const finished = consumeEvents(parsed.events);
+      if (finished) {
+        await reader.cancel().catch(() => undefined);
+        return finished;
       }
     }
   } finally {
@@ -324,17 +399,30 @@ export async function streamRunUntilDone(
     }
   }
 
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    const parsed = parseSseChunk(buffer.endsWith('\n\n') ? buffer : `${buffer}\n\n`);
+    const finished = consumeEvents(parsed.events);
+    if (finished) return finished;
+  }
+
   if (state.terminal) {
     assertTerminalStatus(state.terminal.status);
     return { status: state.terminal.status, result: state.terminal.text };
   }
 
-  if (TERMINAL_STATUSES.has(state.lastStatus) && state.assistantText.trim()) {
-    assertTerminalStatus(state.lastStatus);
-    return { status: state.lastStatus, result: state.assistantText.trim() };
+  if (state.assistantText.trim()) {
+    const status = TERMINAL_STATUSES.has(state.lastStatus) ? state.lastStatus : 'FINISHED';
+    assertTerminalStatus(status);
+    return { status, result: state.assistantText.trim() };
   }
 
-  return getRun(config, agentId, runId);
+  const fallback = await getRun(config, agentId, runId);
+  if (fallback.result?.trim()) return fallback;
+  if (TERMINAL_STATUSES.has(fallback.status) && state.assistantText.trim()) {
+    return { status: fallback.status, result: state.assistantText.trim() };
+  }
+  return fallback;
 }
 
 /**
@@ -365,7 +453,7 @@ export async function callCursorForTestCases(
 
     const text = terminal.result?.trim() ?? '';
     if (!text) {
-      throw new Error('Resposta vazia do Cursor');
+      throw new Error('Resposta vazia do Cursor. Com o Grok isso pode ocorrer se o modelo só raciocinar sem devolver o CSV — tente novamente ou use o Composer.');
     }
 
     return {

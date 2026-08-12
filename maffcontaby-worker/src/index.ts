@@ -45,6 +45,12 @@ type EntryDto = {
   conferido: boolean;
 };
 
+type PromptDto = {
+  id: string;
+  description: string;
+  text: string;
+};
+
 type DbSnapshot = {
   version: 1;
   updatedAt: string;
@@ -53,6 +59,7 @@ type DbSnapshot = {
   competencias: CompetenciaDto[];
   assets: AssetDto[];
   entries: EntryDto[];
+  prompts: PromptDto[];
 };
 
 type ImportResult = {
@@ -497,6 +504,7 @@ async function readDb(env: Env): Promise<DbSnapshot> {
       competencias?: unknown;
       assets?: unknown;
       entries?: unknown;
+      prompts?: unknown;
     };
 
     const people: DbSnapshot['people'] = Array.isArray(anyStored.people)
@@ -583,7 +591,18 @@ async function readDb(env: Env): Promise<DbSnapshot> {
       })
       .filter(e => e.personId && e.competencia && e.grupo);
 
-    return { version: 1, updatedAt: stored.updatedAt, people, groups, competencias, assets, entries };
+    const prompts: DbSnapshot['prompts'] = Array.isArray(anyStored.prompts)
+      ? (anyStored.prompts as unknown[]).map(p => {
+          const x = p as { id?: unknown; description?: unknown; text?: unknown };
+          return {
+            id: typeof x.id === 'string' && x.id.trim() ? x.id.trim() : crypto.randomUUID(),
+            description: typeof x.description === 'string' ? x.description : '',
+            text: typeof x.text === 'string' ? x.text : '',
+          };
+        }).filter(p => p.description.trim() && p.text.trim())
+      : [];
+
+    return { version: 1, updatedAt: stored.updatedAt, people, groups, competencias, assets, entries, prompts };
   }
   return {
     version: 1,
@@ -593,6 +612,7 @@ async function readDb(env: Env): Promise<DbSnapshot> {
     competencias: [],
     assets: [],
     entries: [],
+    prompts: [],
   };
 }
 
@@ -605,6 +625,7 @@ async function writeDb(env: Env, db: DbSnapshot) {
     competencias: db.competencias ?? [],
     assets: db.assets ?? [],
     entries: db.entries ?? [],
+    prompts: db.prompts ?? [],
   };
   await env.MAFF_KV.put(DB_KEY, JSON.stringify(payload));
   return payload;
@@ -983,6 +1004,7 @@ export default {
           competencias: [],
           assets: [],
           entries: [],
+          prompts: [],
         };
         await writeDb(env, cleared);
         return withCors(text('', { status: 204 }));
@@ -1226,6 +1248,65 @@ export default {
       return withCors(methodNotAllowed());
     }
 
+    if (path === '/api/prompts') {
+      const db = await readDb(env);
+
+      if (method === 'GET') return withCors(json(db.prompts));
+
+      if (method === 'POST') {
+        const body = (await request.json().catch(() => null)) as { description?: string; text?: string } | null;
+        const description = body?.description?.trim() ?? '';
+        const textValue = body?.text?.trim() ?? '';
+        if (!description) return withCors(badRequest('description obrigatória'));
+        if (description.length > 150) return withCors(badRequest('description deve ter no máximo 150 caracteres'));
+        if (!textValue) return withCors(badRequest('text obrigatório'));
+        if (textValue.length > 50_000) return withCors(badRequest('text deve ter no máximo 50000 caracteres'));
+
+        const exists = db.prompts.some(p => p.description.toLowerCase() === description.toLowerCase());
+        if (exists) return withCors(badRequest('Prompt já existe'));
+
+        const prompt: PromptDto = { id: crypto.randomUUID(), description, text: textValue };
+        db.prompts.push(prompt);
+        await writeDb(env, db);
+        return withCors(json(prompt, { status: 201 }));
+      }
+
+      return withCors(methodNotAllowed());
+    }
+
+    if (path.startsWith('/api/prompts/')) {
+      const id = path.slice('/api/prompts/'.length);
+      if (!id) return withCors(notFound());
+      const db = await readDb(env);
+      const idx = db.prompts.findIndex(p => p.id === id);
+      if (idx < 0) return withCors(notFound());
+
+      if (method === 'PUT') {
+        const body = (await request.json().catch(() => null)) as { description?: string; text?: string } | null;
+        const description = body?.description?.trim() ?? '';
+        const textValue = body?.text?.trim() ?? '';
+        if (!description) return withCors(badRequest('description obrigatória'));
+        if (description.length > 150) return withCors(badRequest('description deve ter no máximo 150 caracteres'));
+        if (!textValue) return withCors(badRequest('text obrigatório'));
+        if (textValue.length > 50_000) return withCors(badRequest('text deve ter no máximo 50000 caracteres'));
+
+        const exists = db.prompts.some(p => p.id !== id && p.description.toLowerCase() === description.toLowerCase());
+        if (exists) return withCors(badRequest('Prompt já existe'));
+
+        db.prompts[idx] = { ...db.prompts[idx], description, text: textValue };
+        await writeDb(env, db);
+        return withCors(text('', { status: 204 }));
+      }
+
+      if (method === 'DELETE') {
+        db.prompts.splice(idx, 1);
+        await writeDb(env, db);
+        return withCors(text('', { status: 204 }));
+      }
+
+      return withCors(methodNotAllowed());
+    }
+
     if (path === '/api/competencias') {
       const db = await readDb(env);
 
@@ -1383,6 +1464,7 @@ export default {
       if (typeof body.conferido !== 'boolean') {
         return withCors(badRequest('conferido inválido'));
       }
+      const conferido = body.conferido;
 
       const ids = new Set(
         body.ids.filter((id): id is string => typeof id === 'string' && id.trim().length > 0),
@@ -1394,7 +1476,7 @@ export default {
       db.entries = db.entries.map(entry => {
         if (!ids.has(entry.id)) return entry;
         updated += 1;
-        return { ...entry, conferido: body.conferido };
+        return { ...entry, conferido };
       });
       if (updated === 0) return withCors(notFound());
 

@@ -85,6 +85,7 @@ export function ImportarPage() {
       await queryClient.invalidateQueries({ queryKey: ['entries'] });
       await queryClient.invalidateQueries({ queryKey: ['groups'] });
       await queryClient.invalidateQueries({ queryKey: ['competencias'] });
+      await queryClient.invalidateQueries({ queryKey: ['prompts'] });
     },
   });
 
@@ -122,6 +123,7 @@ export function ImportarPage() {
       await queryClient.invalidateQueries({ queryKey: ['entries'] });
       await queryClient.invalidateQueries({ queryKey: ['groups'] });
       await queryClient.invalidateQueries({ queryKey: ['competencias'] });
+      await queryClient.invalidateQueries({ queryKey: ['prompts'] });
     },
   });
 

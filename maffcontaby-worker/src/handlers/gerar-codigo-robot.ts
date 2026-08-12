@@ -1,5 +1,6 @@
 import type { AuthenticatedFetchResult } from '../fetch-authenticated-url';
 import { callCursorForTestCases, type CursorProgressCallback } from '../cursor-client';
+import { buildGerarCodigoPlaywrightPrompt } from '../prompts/gerar-codigo-playwright';
 import { buildGerarCodigoRobotPrompt } from '../prompts/gerar-codigo-robot';
 import {
   formatPromptForDownload,
@@ -8,6 +9,7 @@ import {
   type GerarCasoTesteEnv,
   type PreparedGeneration,
 } from './gerar-caso-teste';
+import type { GerarCasoTesteRequest } from '../types/gerar-caso-teste';
 import type { GerarCodigoRobotResponse, RobotFile } from '../types/gerar-codigo-robot';
 
 function stripJsonFence(raw: string): string {
@@ -67,7 +69,7 @@ export function parseRobotProject(raw: string): ParseRobotProjectResult {
   try {
     parsed = JSON.parse(candidate) as Record<string, unknown>;
   } catch {
-    throw new Error('Resposta da IA não é um JSON válido de projeto Robot Framework');
+    throw new Error('Resposta da IA não é um JSON válido de projeto de automação');
   }
 
   const rawFiles = Array.isArray(parsed.files) ? parsed.files : [];
@@ -87,7 +89,7 @@ export function parseRobotProject(raw: string): ParseRobotProjectResult {
   }
 
   if (files.length === 0) {
-    throw new Error('A IA não retornou arquivos válidos para o projeto Robot Framework');
+    throw new Error('A IA não retornou arquivos válidos para o projeto de automação');
   }
 
   const summary = typeof parsed.summary === 'string' ? parsed.summary.trim() : '';
@@ -133,6 +135,7 @@ function buildRobotSuccessResponse(
       authSuccess: useAuth ? (pageContext as AuthenticatedFetchResult).authSuccess : undefined,
       authMode: useAuth ? (pageContext as AuthenticatedFetchResult).authMode : undefined,
       authError: useAuth ? (pageContext as AuthenticatedFetchResult).authError : undefined,
+      automationStack: prep.automationStack,
     },
   };
 }
@@ -142,9 +145,18 @@ function sseEncode(event: string, data: unknown): Uint8Array {
   return new TextEncoder().encode(`event: ${event}\ndata: ${payload}\n\n`);
 }
 
-/** Versão SSE: gera um projeto Robot Framework + Browser Library com base no front-end. */
+/** Versão SSE: gera um projeto de automação (Robot ou Playwright) com base no front-end. */
 export async function handleGerarCodigoRobotStream(request: Request, env: GerarCasoTesteEnv, isAdmin = false): Promise<Response> {
-  const prepared = await prepareGeneration(request, env, buildGerarCodigoRobotPrompt, isAdmin);
+  let stack: 'robot' | 'playwright' = 'robot';
+  try {
+    const peeked = (await request.clone().json()) as GerarCasoTesteRequest;
+    if (peeked?.automationStack === 'playwright') stack = 'playwright';
+  } catch {
+    // prepareGeneration valida o JSON
+  }
+
+  const promptBuilder = stack === 'playwright' ? buildGerarCodigoPlaywrightPrompt : buildGerarCodigoRobotPrompt;
+  const prepared = await prepareGeneration(request, env, promptBuilder, isAdmin);
   if (!prepared.ok) return prepared.response;
 
   const prep = prepared.data;

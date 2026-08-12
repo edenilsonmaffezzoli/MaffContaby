@@ -36,6 +36,7 @@ const ROUTE_TITLES: Record<string, string> = {
   '/usuarios': 'Usuários',
   '/cadastro/pessoas': 'Cadastro de Pessoa',
   '/cadastro/grupos': 'Cadastro de Grupo',
+  '/cadastro/prompts': 'Cadastro de Prompt',
 };
 
 function LogoMark() {
@@ -190,6 +191,9 @@ export function Layout() {
                 </NavLink>
                 <NavLink to="/cadastro/grupos" className={subNavLinkClass} onClick={closeSidebar}>
                   Cadastro de Grupo
+                </NavLink>
+                <NavLink to="/cadastro/prompts" className={subNavLinkClass} onClick={closeSidebar}>
+                  Cadastro de Prompt
                 </NavLink>
               </div>
             )}

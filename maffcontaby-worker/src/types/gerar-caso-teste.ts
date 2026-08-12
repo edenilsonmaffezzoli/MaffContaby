@@ -22,6 +22,10 @@ export type GerarCasoTesteRequest = {
   targetAuth?: TargetAuthInput;
   /** Modelo de IA escolhido (apenas admin); ignorado para não-admin. */
   model?: string;
+  /** Prompt cadastrado; omitido = Prompt padrão. */
+  promptId?: string;
+  /** Stack de automação para "Gerar código auto". Omitido = robot. */
+  automationStack?: 'robot' | 'playwright';
 };
 
 export type QaseStep = {
