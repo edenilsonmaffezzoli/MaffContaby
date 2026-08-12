@@ -6,7 +6,7 @@ export const AI_QASE_CSV_HEADER =
 const MAX_STEPS = 7;
 const ALLOWED_PRIORITIES = new Set(['low', 'medium', 'high']);
 
-function parseCsvRecords(csv: string): string[][] {
+function parseCsvRecords(csv: string, delimiter = ','): string[][] {
   const records: string[][] = [];
   let row: string[] = [];
   let field = '';
@@ -31,7 +31,7 @@ function parseCsvRecords(csv: string): string[][] {
 
     if (ch === '"') {
       inQuotes = true;
-    } else if (ch === ',') {
+    } else if (ch === delimiter) {
       row.push(field);
       field = '';
     } else if (ch === '\r' || ch === '\n') {
@@ -52,13 +52,19 @@ function parseCsvRecords(csv: string): string[][] {
 }
 
 function stripCsvFence(raw: string): string {
-  let s = raw.trim();
-  if (s.startsWith('```')) {
-    s = s.replace(/^```(?:csv)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  let s = raw.replace(/^\uFEFF/, '').trim();
+  s = s.replace(/```(?:csv|text|plain|xml)?\s*/gi, '').replace(/```/g, '');
+  const headerMatch = s.match(/Suite\s*[,;]\s*Subsuite\s*[,;]\s*Title/i);
+  if (headerMatch?.index != null && headerMatch.index > 0) {
+    s = s.slice(headerMatch.index).trim();
   }
-  const headerIdx = s.search(/^Suite\s*,\s*Subsuite\s*,\s*Title/im);
-  if (headerIdx > 0) return s.slice(headerIdx).trim();
   return s;
+}
+
+function detectCsvDelimiter(csv: string): ',' | ';' {
+  const firstLine = csv.split(/\r?\n/, 1)[0] ?? '';
+  if (/Suite\s*;\s*Subsuite/i.test(firstLine)) return ';';
+  return ',';
 }
 
 function normalizeHeaderCell(cell: string): string {
@@ -85,7 +91,7 @@ function parseCombinedStepsField(text: string): QaseStep[] {
 
     const action = actionMatch[1].trim();
     const rest = lines.slice(1).join('\n');
-    const resultMatch = rest.match(/Resultado esperado:\s*(.+)/is);
+    const resultMatch = rest.match(/(?:Resultado esperado|Expected result|Expected Result):\s*(.+)/is);
     const expected_result = resultMatch?.[1]?.trim() ?? '';
     if (action && expected_result) steps.push({ action, expected_result });
   }
@@ -142,7 +148,8 @@ export type ParseAiQaseCsvResult = {
 /** Converte CSV simples (Suite,Subsuite,Title,…) retornado pela IA em casos estruturados. */
 export function parseAiQaseCsv(raw: string): ParseAiQaseCsvResult {
   const csv = stripCsvFence(raw);
-  const records = parseCsvRecords(csv);
+  const delimiter = detectCsvDelimiter(csv);
+  const records = parseCsvRecords(csv, delimiter);
   if (records.length < 2) {
     throw new Error('CSV da IA sem cabeçalho ou linhas de dados');
   }
@@ -204,4 +211,78 @@ export function parseAiQaseCsv(raw: string): ParseAiQaseCsvResult {
   }
 
   return { cases, rawCount, dropped: rawCount - cases.length };
+}
+
+function decodeXml(value: string): string {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&')
+    .trim();
+}
+
+function xmlTag(block: string, tag: string): string {
+  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, 'i');
+  const m = block.match(re);
+  return m ? decodeXml(m[1]) : '';
+}
+
+function xmlAttr(openTag: string, name: string): string {
+  const m = openTag.match(new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`, 'i'));
+  return m ? decodeXml(m[1]) : '';
+}
+
+/** Grok às vezes devolve o XML antigo do Qase em vez do CSV. */
+export function parseAiQaseXml(raw: string): ParseAiQaseCsvResult {
+  const start = raw.search(/<testsuites[\s>]/i);
+  if (start < 0) throw new Error('XML Qase não encontrado');
+  const xml = raw.slice(start);
+  const cases: QaseCase[] = [];
+  let rawCount = 0;
+
+  const suiteBlocks = [...xml.matchAll(/<testsuite\b([^>]*)>([\s\S]*?)<\/testsuite>/gi)];
+  const blocks =
+    suiteBlocks.length > 0
+      ? suiteBlocks.map(m => ({ suite: xmlAttr(m[1], 'name') || 'Geral', body: m[2] }))
+      : [{ suite: 'Geral', body: xml }];
+
+  for (const { suite, body } of blocks) {
+    const caseBlocks = [...body.matchAll(/<testcase\b([^>]*)>([\s\S]*?)<\/testcase>/gi)];
+    for (const cm of caseBlocks) {
+      const title = xmlAttr(cm[1], 'name') || xmlTag(cm[2], 'title');
+      if (!title.trim()) continue;
+      rawCount++;
+      const stepBlocks = [...cm[2].matchAll(/<step\b[^>]*>([\s\S]*?)<\/step>/gi)];
+      const steps = stepBlocks
+        .map(sm => ({
+          action: xmlTag(sm[1], 'actions') || xmlTag(sm[1], 'action'),
+          expected_result: xmlTag(sm[1], 'expectedresults') || xmlTag(sm[1], 'expected_result') || xmlTag(sm[1], 'expectedresult'),
+        }))
+        .filter(s => s.action && s.expected_result)
+        .slice(0, MAX_STEPS);
+      if (!steps.length) continue;
+      cases.push({
+        suite: suite.slice(0, 200),
+        subsuite: (xmlTag(cm[2], 'subsuite') || suite).slice(0, 200),
+        title: title.trim(),
+        description: xmlTag(cm[2], 'description') || title.trim(),
+        preconditions: xmlTag(cm[2], 'preconditions') || undefined,
+        steps,
+      });
+    }
+  }
+
+  if (!cases.length) throw new Error('Nenhum caso válido no XML da IA');
+  return { cases, rawCount, dropped: rawCount - cases.length };
+}
+
+export function looksLikeParsableCases(text: string): boolean {
+  const t = text.trim();
+  if (/Suite\s*[,;]\s*Subsuite\s*[,;]\s*Title/i.test(t)) return true;
+  if (/<testsuites[\s>]/i.test(t) && /<testcase\b/i.test(t)) return true;
+  if (/"cases"\s*:/.test(t) && /"title"\s*:/.test(t)) return true;
+  return false;
 }

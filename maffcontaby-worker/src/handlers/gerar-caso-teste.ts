@@ -2,7 +2,7 @@ import { fetchAuthenticatedPage, type AuthenticatedFetchResult } from '../fetch-
 import { fetchSystemPathContent, isHttpSystemPath } from '../fetch-system-url';
 import { callCursorForTestCases, type CursorImagePart, type CursorProgressCallback } from '../cursor-client';
 import { groupCasesBySubject } from '../group-cases-by-subject';
-import { parseAiQaseCsv } from '../parse-ai-qase-csv';
+import { parseAiQaseCsv, parseAiQaseXml } from '../parse-ai-qase-csv';
 import { buildGerarCasoTestePrompt, type PageContextForPrompt } from '../prompts/gerar-caso-teste';
 import { getPromptById } from '../prompts-store';
 import type {
@@ -320,25 +320,39 @@ function tryParseAiJson(raw: string): ParseAiResult | null {
 }
 
 export function parseAiResult(raw: string): ParseAiResult {
-  try {
-    const { cases: normalized, rawCount, dropped } = parseAiQaseCsv(raw);
-    const grouped = groupCasesBySubject(normalized, []);
-    return {
-      markdown: buildFallbackMarkdown(grouped.cases),
-      cases: grouped.cases,
-      suitesUsed: grouped.suitesUsed,
-      groupingWarning: grouped.groupingWarning,
-      casesFromAi: rawCount,
-      casesAfterNormalize: grouped.cases.length,
-      casesDropped: dropped,
-    };
-  } catch {
-  }
+  const tryCsvOrXml = (): ParseAiResult | null => {
+    for (const parse of [parseAiQaseCsv, parseAiQaseXml]) {
+      try {
+        const { cases: normalized, rawCount, dropped } = parse(raw);
+        const grouped = groupCasesBySubject(normalized, []);
+        return {
+          markdown: buildFallbackMarkdown(grouped.cases),
+          cases: grouped.cases,
+          suitesUsed: grouped.suitesUsed,
+          groupingWarning: grouped.groupingWarning,
+          casesFromAi: rawCount,
+          casesAfterNormalize: grouped.cases.length,
+          casesDropped: dropped,
+        };
+      } catch {
+        // tenta o próximo formato
+      }
+    }
+    return null;
+  };
+
+  const fromTable = tryCsvOrXml();
+  if (fromTable) return fromTable;
 
   const fromJson = tryParseAiJson(raw);
   if (fromJson) return fromJson;
 
-  throw new Error('Resposta da IA não é CSV Qase válido nem JSON de casos');
+  const preview = raw.replace(/\s+/g, ' ').trim().slice(0, 280);
+  throw new Error(
+    preview
+      ? `Resposta da IA não é CSV Qase válido nem JSON de casos. Trecho recebido: ${preview}`
+      : 'Resposta da IA não é CSV Qase válido nem JSON de casos',
+  );
 }
 
 function buildFallbackMarkdown(cases: QaseCase[]) {

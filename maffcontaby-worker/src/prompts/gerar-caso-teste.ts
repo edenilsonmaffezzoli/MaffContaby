@@ -196,7 +196,8 @@ Priority: high
 Tags: happy-path;smoke;critico
 
 FORMATO DE SAÍDA — CSV QASE (OBRIGATÓRIO)
-- Retorne APENAS o conteúdo do CSV. Sem frase introdutória, sem comentários, sem markdown, sem blocos de código, sem texto após o CSV.
+- NÃO grave arquivos no disco, NÃO crie pastas, NÃO use XML, NÃO use JSON, NÃO use markdown.
+- A resposta inteira DEVE ser o CSV. Sem frase introdutória, sem comentários, sem blocos de código, sem texto depois do CSV.
 - A PRIMEIRA linha deve ser exatamente o cabeçalho:
 ${AI_QASE_CSV_HEADER}
 - Use vírgula (,) como separador de colunas.
@@ -220,7 +221,7 @@ VALIDAÇÕES FINAIS ANTES DE RESPONDER
 - Cada caso pertence a uma Suite e, idealmente, a uma Subsuite coerente.
 - Não há casos duplicados nem múltiplos cenários empilhados.
 - Os títulos começam com verbo no infinitivo e são específicos.
-- A saída é apenas o CSV, sem nenhum texto extra.
+- A saída é apenas o CSV, sem nenhum texto extra, sem arquivos e sem XML.
 
 ---
 

@@ -1,3 +1,5 @@
+import { looksLikeParsableCases } from './parse-ai-qase-csv';
+
 const CURSOR_API_BASE = 'https://api.cursor.com';
 
 export type CursorConfig = {
@@ -223,8 +225,44 @@ export async function getRun(
   };
 
   const status = data.status ?? 'RUNNING';
-  const result = extractTextFromUnknown(data.result) || extractTextFromUnknown(data.text) || undefined;
+  const result = extractTextFromUnknown(data.result) || extractTextFromUnknown(data.text) || extractTextFromUnknown(data) || undefined;
   return { status, result: result || undefined };
+}
+
+/** Grok em modo agente costuma gravar .csv em artifacts/ em vez de devolver o CSV no result. */
+async function collectCsvFromArtifacts(config: CursorConfig, agentId: string): Promise<string> {
+  try {
+    const listRes = await fetch(`${CURSOR_API_BASE}/v1/agents/${encodeURIComponent(agentId)}/artifacts`, {
+      method: 'GET',
+      headers: authHeaders(config.apiKey),
+    });
+    const listData = (await parseJsonResponse(listRes, 'list artifacts')) as {
+      items?: Array<{ path?: unknown }>;
+    };
+    const paths = (Array.isArray(listData.items) ? listData.items : [])
+      .map(item => (typeof item.path === 'string' ? item.path : ''))
+      .filter(p => /\.csv$/i.test(p))
+      .slice(0, 3);
+    if (!paths.length) return '';
+
+    const chunks: string[] = [];
+    for (const path of paths) {
+      const dlRes = await fetch(
+        `${CURSOR_API_BASE}/v1/agents/${encodeURIComponent(agentId)}/artifacts/download?path=${encodeURIComponent(path)}`,
+        { method: 'GET', headers: authHeaders(config.apiKey) },
+      );
+      const dlData = (await parseJsonResponse(dlRes, 'download artifact')) as { url?: unknown };
+      const url = typeof dlData.url === 'string' ? dlData.url : '';
+      if (!url) continue;
+      const fileRes = await fetch(url);
+      if (!fileRes.ok) continue;
+      const text = await fileRes.text();
+      if (text.trim()) chunks.push(text.trim());
+    }
+    return chunks.join('\n');
+  } catch {
+    return '';
+  }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -551,7 +589,15 @@ export async function callCursorForTestCases(
 
     assertTerminalStatus(terminal.status);
 
-    const text = terminal.result?.trim() ?? '';
+    let text = terminal.result?.trim() ?? '';
+    if (!looksLikeParsableCases(text)) {
+      const fromArtifacts = await collectCsvFromArtifacts(config, created.agentId);
+      if (looksLikeParsableCases(fromArtifacts)) {
+        text = fromArtifacts;
+      } else if (fromArtifacts.trim()) {
+        text = text ? `${text}\n${fromArtifacts}` : fromArtifacts;
+      }
+    }
     if (!text) {
       throw new Error('Resposta vazia do Cursor. Com o Grok isso pode ocorrer se o modelo só raciocinar sem devolver o CSV — tente novamente ou use o Composer.');
     }
