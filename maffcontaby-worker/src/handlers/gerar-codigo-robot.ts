@@ -5,6 +5,7 @@ import { buildGerarCodigoRobotPrompt } from '../prompts/gerar-codigo-robot';
 import {
   formatPromptForDownload,
   prepareGeneration,
+  sseStreamHeaders,
   startSseHeartbeat,
   type GerarCasoTesteEnv,
   type PreparedGeneration,
@@ -220,10 +221,6 @@ export async function handleGerarCodigoRobotStream(request: Request, env: GerarC
   });
 
   return new Response(stream, {
-    headers: {
-      'content-type': 'text/event-stream; charset=utf-8',
-      'cache-control': 'no-cache, no-transform',
-      connection: 'keep-alive',
-    },
+    headers: sseStreamHeaders(),
   });
 }

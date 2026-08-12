@@ -227,6 +227,49 @@ export async function getRun(
   return { status, result: result || undefined };
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** Mantém o SSE do browser vivo enquanto uma Promise longa não gera eventos. */
+async function withProgressTicks<T>(
+  work: Promise<T>,
+  onTick: () => void,
+  intervalMs = 8_000,
+): Promise<T> {
+  const pending = work;
+  while (true) {
+    const raced = await Promise.race([
+      pending.then(v => ({ kind: 'done' as const, v })),
+      sleep(intervalMs).then(() => ({ kind: 'idle' as const })),
+    ]);
+    if (raced.kind === 'idle') {
+      onTick();
+      continue;
+    }
+    return raced.v;
+  }
+}
+
+/** Grok costuma encerrar o SSE ainda em RUNNING; o resultado só aparece no GET run. */
+async function pollRunUntilDone(
+  config: CursorConfig,
+  agentId: string,
+  runId: string,
+  deadlineMs: number,
+  onProgress?: CursorProgressCallback,
+): Promise<{ status: CursorRunStatus; result?: string }> {
+  let last: { status: CursorRunStatus; result?: string } = { status: 'RUNNING' };
+  while (Date.now() < deadlineMs) {
+    last = await getRun(config, agentId, runId);
+    onProgress?.({ type: 'status', status: last.status });
+    if (TERMINAL_STATUSES.has(last.status)) return last;
+    const waitMs = Math.min(4_000, Math.max(500, deadlineMs - Date.now()));
+    await sleep(waitMs);
+  }
+  return last;
+}
+
 export async function deleteAgent(config: CursorConfig, agentId: string): Promise<void> {
   try {
     const res = await fetch(`${CURSOR_API_BASE}/v1/agents/${encodeURIComponent(agentId)}`, {
@@ -298,6 +341,11 @@ function handleSseEvent(
     return;
   }
 
+  if (eventName === 'thinking' || eventName === 'heartbeat' || eventName === 'tool_call') {
+    onProgress?.({ type: 'status', status: state.lastStatus || 'RUNNING' });
+    return;
+  }
+
   if (eventName === 'result') {
     const payload = parseJsonData<{ status?: CursorRunStatus }>(evt.data);
     const status = payload?.status && TERMINAL_STATUSES.has(payload.status) ? payload.status : 'FINISHED';
@@ -308,7 +356,7 @@ function handleSseEvent(
   }
 
   if (eventName === 'done') {
-    if (!state.terminal) {
+    if (!state.terminal && state.assistantText.trim()) {
       const status = TERMINAL_STATUSES.has(state.lastStatus) ? state.lastStatus : 'FINISHED';
       state.terminal = { status, text: state.assistantText.trim() };
       state.lastStatus = status;
@@ -335,14 +383,22 @@ export async function streamRunUntilDone(
   const remainingMs = Math.max(5_000, deadlineMs - Date.now());
   const url = `${CURSOR_API_BASE}/v1/agents/${encodeURIComponent(agentId)}/runs/${encodeURIComponent(runId)}/stream`;
 
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: authHeaders(config.apiKey, { Accept: 'text/event-stream' }),
-    signal: AbortSignal.timeout(remainingMs),
-  });
+  let res: Response;
+  try {
+    res = await withProgressTicks(
+      fetch(url, {
+        method: 'GET',
+        headers: authHeaders(config.apiKey, { Accept: 'text/event-stream' }),
+        signal: AbortSignal.timeout(remainingMs),
+      }),
+      () => onProgress?.({ type: 'status', status: 'RUNNING' }),
+    );
+  } catch {
+    return pollRunUntilDone(config, agentId, runId, deadlineMs, onProgress);
+  }
 
   if (res.status === 410) {
-    return getRun(config, agentId, runId);
+    return pollRunUntilDone(config, agentId, runId, deadlineMs, onProgress);
   }
 
   if (!res.ok) {
@@ -352,7 +408,7 @@ export async function streamRunUntilDone(
 
   const body = res.body;
   if (!body) {
-    return getRun(config, agentId, runId);
+    return pollRunUntilDone(config, agentId, runId, deadlineMs, onProgress);
   }
 
   const state = {
@@ -377,9 +433,27 @@ export async function streamRunUntilDone(
     return null;
   };
 
+  const tickAlive = () => {
+    onProgress?.({ type: 'status', status: state.lastStatus || 'RUNNING' });
+  };
+
+  let pendingRead: Promise<ReadableStreamReadResult<Uint8Array>> | null = null;
+
   try {
     while (Date.now() < deadlineMs) {
-      const { done, value } = await reader.read();
+      if (!pendingRead) pendingRead = reader.read();
+      const raced = await Promise.race([
+        pendingRead.then(r => ({ kind: 'read' as const, r })),
+        sleep(8_000).then(() => ({ kind: 'idle' as const })),
+      ]);
+      if (raced.kind === 'idle') {
+        // Grok pode ficar minutos só em raciocínio, sem bytes no SSE.
+        // O tick impede o proxy/navegador de derrubar o canal Worker→browser.
+        tickAlive();
+        continue;
+      }
+      pendingRead = null;
+      const { done, value } = raced.r;
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
@@ -391,6 +465,8 @@ export async function streamRunUntilDone(
         return finished;
       }
     }
+  } catch {
+    // Stream do Cursor caiu (ociosidade/timeout). O GET run ainda pode ter o resultado.
   } finally {
     try {
       reader.releaseLock();
@@ -417,12 +493,7 @@ export async function streamRunUntilDone(
     return { status, result: state.assistantText.trim() };
   }
 
-  const fallback = await getRun(config, agentId, runId);
-  if (fallback.result?.trim()) return fallback;
-  if (TERMINAL_STATUSES.has(fallback.status) && state.assistantText.trim()) {
-    return { status: fallback.status, result: state.assistantText.trim() };
-  }
-  return fallback;
+  return pollRunUntilDone(config, agentId, runId, deadlineMs, onProgress);
 }
 
 /**
@@ -440,8 +511,12 @@ export async function callCursorForTestCases(
   let agentId: string | undefined;
 
   try {
-    const created = await createAgentRun(config, prompt, images);
+    onProgress?.({ type: 'status', status: 'CREATING' });
+    const created = await withProgressTicks(createAgentRun(config, prompt, images), () => {
+      onProgress?.({ type: 'status', status: 'CREATING' });
+    });
     agentId = created.agentId;
+    onProgress?.({ type: 'status', status: 'RUNNING' });
 
     const terminal = await streamRunUntilDone(config, created.agentId, created.runId, deadlineMs, onProgress);
 

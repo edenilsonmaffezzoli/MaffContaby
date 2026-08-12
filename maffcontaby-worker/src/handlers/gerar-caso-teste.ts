@@ -620,17 +620,28 @@ function sseEncode(event: string, data: unknown): Uint8Array {
  * arranque/raciocínio (que pode levar minutos em respostas grandes, como o
  * projeto Robot) nenhum byte trafega e o edge da Cloudflare/navegador derruba a
  * conexão ociosa (~100s), resultando em "network error" ou stream sem resultado.
- * Um comentário SSE (`: ...`) periódico é ignorado pelo parser do cliente, mas
- * conta como tráfego e impede o timeout de ociosidade.
+ * Eventos `status` periódicos (não comentários SSE) mantêm o canal vivo:
+ * proxies costumam descartar `: keep-alive`.
  */
+export function sseStreamHeaders(): HeadersInit {
+  return {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-cache, no-transform',
+    connection: 'keep-alive',
+    'x-accel-buffering': 'no',
+    // Evita gzip no edge, que bufferiza e mata o SSE por ociosidade.
+    'content-encoding': 'identity',
+  };
+}
+
 export function startSseHeartbeat(
   controller: ReadableStreamDefaultController<Uint8Array>,
-  intervalMs = 15_000,
+  intervalMs = 8_000,
 ): () => void {
-  const encoder = new TextEncoder();
   const id = setInterval(() => {
     try {
-      controller.enqueue(encoder.encode(': keep-alive\n\n'));
+      // Evento real (não comentário SSE): proxies costumam descartar `: keep-alive`.
+      controller.enqueue(sseEncode('status', { status: 'RUNNING' }));
     } catch {
       // controller já fechado
     }
@@ -709,10 +720,6 @@ export async function handleGerarCasoTesteStream(request: Request, env: GerarCas
   });
 
   return new Response(stream, {
-    headers: {
-      'content-type': 'text/event-stream; charset=utf-8',
-      'cache-control': 'no-cache, no-transform',
-      connection: 'keep-alive',
-    },
+    headers: sseStreamHeaders(),
   });
 }
