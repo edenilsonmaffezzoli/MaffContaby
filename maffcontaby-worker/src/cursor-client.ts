@@ -251,21 +251,36 @@ async function withProgressTicks<T>(
   }
 }
 
-/** Grok costuma encerrar o SSE ainda em RUNNING; o resultado só aparece no GET run. */
+/**
+ * Poucas tentativas: o plano Free do Workers limita a 50 subrequests por invocação.
+ * O caminho principal é o SSE do Cursor (1 subrequest); isto só cobre stream encerrado.
+ */
 async function pollRunUntilDone(
   config: CursorConfig,
   agentId: string,
   runId: string,
   deadlineMs: number,
   onProgress?: CursorProgressCallback,
+  maxAttempts = 6,
 ): Promise<{ status: CursorRunStatus; result?: string }> {
   let last: { status: CursorRunStatus; result?: string } = { status: 'RUNNING' };
-  while (Date.now() < deadlineMs) {
-    last = await getRun(config, agentId, runId);
+  onProgress?.({ type: 'status', status: 'RUNNING' });
+  for (let attempt = 0; attempt < maxAttempts && Date.now() < deadlineMs; attempt++) {
+    try {
+      last = await getRun(config, agentId, runId);
+    } catch {
+      onProgress?.({ type: 'status', status: last.status || 'RUNNING' });
+      await sleep(5_000);
+      continue;
+    }
     onProgress?.({ type: 'status', status: last.status });
     if (TERMINAL_STATUSES.has(last.status)) return last;
-    const waitMs = Math.min(4_000, Math.max(500, deadlineMs - Date.now()));
-    await sleep(waitMs);
+    const waitMs = Math.min(5_000, Math.max(500, deadlineMs - Date.now()));
+    await withProgressTicks(
+      sleep(waitMs),
+      () => onProgress?.({ type: 'status', status: last.status }),
+      4_000,
+    );
   }
   return last;
 }
@@ -379,6 +394,7 @@ export async function streamRunUntilDone(
   runId: string,
   deadlineMs: number,
   onProgress?: CursorProgressCallback,
+  reconnectsLeft = 8,
 ): Promise<{ status: CursorRunStatus; result?: string }> {
   const remainingMs = Math.max(5_000, deadlineMs - Date.now());
   const url = `${CURSOR_API_BASE}/v1/agents/${encodeURIComponent(agentId)}/runs/${encodeURIComponent(runId)}/stream`;
@@ -444,7 +460,7 @@ export async function streamRunUntilDone(
       if (!pendingRead) pendingRead = reader.read();
       const raced = await Promise.race([
         pendingRead.then(r => ({ kind: 'read' as const, r })),
-        sleep(8_000).then(() => ({ kind: 'idle' as const })),
+        sleep(5_000).then(() => ({ kind: 'idle' as const })),
       ]);
       if (raced.kind === 'idle') {
         // Grok pode ficar minutos só em raciocínio, sem bytes no SSE.
@@ -493,7 +509,16 @@ export async function streamRunUntilDone(
     return { status, result: state.assistantText.trim() };
   }
 
-  return pollRunUntilDone(config, agentId, runId, deadlineMs, onProgress);
+  const snap = await getRun(config, agentId, runId);
+  onProgress?.({ type: 'status', status: snap.status });
+  if (TERMINAL_STATUSES.has(snap.status) || snap.result?.trim()) return snap;
+
+  if (reconnectsLeft > 0 && Date.now() < deadlineMs) {
+    onProgress?.({ type: 'status', status: 'RUNNING' });
+    return streamRunUntilDone(config, agentId, runId, deadlineMs, onProgress, reconnectsLeft - 1);
+  }
+
+  return snap;
 }
 
 /**

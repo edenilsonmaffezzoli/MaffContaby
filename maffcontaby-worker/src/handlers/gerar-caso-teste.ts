@@ -608,9 +608,13 @@ export async function handleGerarCasoTeste(request: Request, env: GerarCasoTeste
   return json(buildSuccessResponse(prep, cursorOut, result));
 }
 
-function sseEncode(event: string, data: unknown): Uint8Array {
+/** Padding ~2 KB: proxies só descarregam o SSE acima desse limiar. */
+const SSE_FLUSH_PAD = `: ${'.'.repeat(2048)}\n\n`;
+
+function sseEncode(event: string, data: unknown, pad = false): Uint8Array {
   const payload = typeof data === 'string' ? data : JSON.stringify(data);
-  return new TextEncoder().encode(`event: ${event}\ndata: ${payload}\n\n`);
+  const body = `event: ${event}\ndata: ${payload}\n\n`;
+  return new TextEncoder().encode(pad ? `${body}${SSE_FLUSH_PAD}` : body);
 }
 
 /**
@@ -636,12 +640,11 @@ export function sseStreamHeaders(): HeadersInit {
 
 export function startSseHeartbeat(
   controller: ReadableStreamDefaultController<Uint8Array>,
-  intervalMs = 8_000,
+  intervalMs = 5_000,
 ): () => void {
   const id = setInterval(() => {
     try {
-      // Evento real (não comentário SSE): proxies costumam descartar `: keep-alive`.
-      controller.enqueue(sseEncode('status', { status: 'RUNNING' }));
+      controller.enqueue(sseEncode('status', { status: 'RUNNING' }, true));
     } catch {
       // controller já fechado
     }
@@ -651,20 +654,40 @@ export function startSseHeartbeat(
 
 /** Versão SSE: emite eventos de progresso ao cliente enquanto a IA gera os casos. */
 export async function handleGerarCasoTesteStream(request: Request, env: GerarCasoTesteEnv, isAdmin = false): Promise<Response> {
-  const prepared = await prepareGeneration(request, env, buildGerarCasoTestePrompt, isAdmin);
-  if (!prepared.ok) return prepared.response;
-
-  const prep = prepared.data;
-  const { config, prompt, cursorImages, reqImages, targetAuth, pageContext } = prep;
-
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (event: string, data: unknown) => {
-        controller.enqueue(sseEncode(event, data));
+        const pad = event === 'status' || event === 'progress';
+        controller.enqueue(sseEncode(event, data, pad));
       };
 
       const stopHeartbeat = startSseHeartbeat(controller);
+      let downloadPrompt: string | undefined;
       try {
+        send('progress', { phase: 'building-prompt' });
+
+        const prepared = await prepareGeneration(request, env, buildGerarCasoTestePrompt, isAdmin);
+        if (!prepared.ok) {
+          let message = 'Falha ao preparar a geração';
+          try {
+            const raw = await prepared.response.text();
+            try {
+              const parsed = JSON.parse(raw) as { error?: string };
+              message = parsed.error?.trim() || raw.trim() || message;
+            } catch {
+              message = raw.trim() || message;
+            }
+          } catch {
+            // mantém message
+          }
+          send('error', { error: message });
+          return;
+        }
+
+        const prep = prepared.data;
+        const { config, prompt, cursorImages, reqImages, targetAuth, pageContext } = prep;
+        downloadPrompt = formatPromptForDownload(prompt, reqImages, targetAuth);
+
         send('progress', {
           phase: pageContext.fetched ? 'building-prompt' : 'calling-ai',
           urlContentFetched: pageContext.fetched,
@@ -704,7 +727,7 @@ export async function handleGerarCasoTesteStream(request: Request, env: GerarCas
             ? 'Tempo esgotado ao gerar casos de teste (Cursor)'
             : msg;
         try {
-          send('error', { error: friendly, prompt: formatPromptForDownload(prompt, reqImages, targetAuth) });
+          send('error', { error: friendly, prompt: downloadPrompt });
         } catch {
           // canal já fechado
         }

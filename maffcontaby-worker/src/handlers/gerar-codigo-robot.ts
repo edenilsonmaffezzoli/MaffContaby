@@ -141,9 +141,11 @@ function buildRobotSuccessResponse(
   };
 }
 
-function sseEncode(event: string, data: unknown): Uint8Array {
+function sseEncode(event: string, data: unknown, pad = false): Uint8Array {
   const payload = typeof data === 'string' ? data : JSON.stringify(data);
-  return new TextEncoder().encode(`event: ${event}\ndata: ${payload}\n\n`);
+  const body = `event: ${event}\ndata: ${payload}\n\n`;
+  const flushPad = pad ? `: ${'.'.repeat(2048)}\n\n` : '';
+  return new TextEncoder().encode(`${body}${flushPad}`);
 }
 
 /** Versão SSE: gera um projeto de automação (Robot ou Playwright) com base no front-end. */
@@ -157,66 +159,84 @@ export async function handleGerarCodigoRobotStream(request: Request, env: GerarC
   }
 
   const promptBuilder = stack === 'playwright' ? buildGerarCodigoPlaywrightPrompt : buildGerarCodigoRobotPrompt;
-  const prepared = await prepareGeneration(request, env, promptBuilder, isAdmin);
-  if (!prepared.ok) return prepared.response;
-
-  const prep = prepared.data;
-  const { config, prompt, cursorImages, reqImages, targetAuth, pageContext } = prep;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (event: string, data: unknown) => {
         try {
-          controller.enqueue(sseEncode(event, data));
+          const pad = event === 'status' || event === 'progress';
+          controller.enqueue(sseEncode(event, data, pad));
         } catch {
           // controller já fechado
         }
       };
 
-      send('progress', {
-        phase: pageContext.fetched ? 'building-prompt' : 'calling-ai',
-        urlContentFetched: pageContext.fetched,
-        urlFetchError: pageContext.fetchError,
-      });
-
-      const onProgress: CursorProgressCallback = ev => {
-        if (ev.type === 'status') send('status', { status: ev.status });
-        else send('delta', { chars: ev.chars });
-      };
-
-      send('progress', { phase: 'calling-ai' });
-
       const stopHeartbeat = startSseHeartbeat(controller);
-      let cursorOut: Awaited<ReturnType<typeof callCursorForTestCases>>;
       try {
-        cursorOut = await callCursorForTestCases(config, prompt, cursorImages, onProgress, detectRobotTruncated);
-      } catch (err) {
+        send('progress', { phase: 'building-prompt' });
+
+        const prepared = await prepareGeneration(request, env, promptBuilder, isAdmin);
+        if (!prepared.ok) {
+          let message = 'Falha ao preparar a geração';
+          try {
+            const raw = await prepared.response.text();
+            message = raw.trim() || message;
+          } catch {
+            // mantém message
+          }
+          send('error', { error: message });
+          return;
+        }
+
+        const prep = prepared.data;
+        const { config, prompt, cursorImages, reqImages, targetAuth, pageContext } = prep;
+
+        send('progress', {
+          phase: pageContext.fetched ? 'building-prompt' : 'calling-ai',
+          urlContentFetched: pageContext.fetched,
+          urlFetchError: pageContext.fetchError,
+        });
+
+        const onProgress: CursorProgressCallback = ev => {
+          if (ev.type === 'status') send('status', { status: ev.status });
+          else send('delta', { chars: ev.chars });
+        };
+
+        send('progress', { phase: 'calling-ai' });
+
+        let cursorOut: Awaited<ReturnType<typeof callCursorForTestCases>>;
+        try {
+          cursorOut = await callCursorForTestCases(config, prompt, cursorImages, onProgress, detectRobotTruncated);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Erro ao chamar Cursor';
+          const friendly =
+            msg.includes('Timeout') || msg.includes('timeout') || msg.includes('aborted')
+              ? 'Tempo esgotado ao gerar o código automatizado (Cursor)'
+              : msg;
+          send('error', { error: friendly, prompt: formatPromptForDownload(prompt, reqImages, targetAuth) });
+          return;
+        }
+
+        send('progress', { phase: 'parsing' });
+
+        let result: ParseRobotProjectResult;
+        try {
+          result = parseRobotProject(cursorOut.text);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Resposta inválida da IA';
+          send('error', { error: msg, prompt: formatPromptForDownload(prompt, reqImages, targetAuth) });
+          return;
+        }
+
+        send('result', buildRobotSuccessResponse(prep, cursorOut, result));
+      } finally {
         stopHeartbeat();
-        const msg = err instanceof Error ? err.message : 'Erro ao chamar Cursor';
-        const friendly =
-          msg.includes('Timeout') || msg.includes('timeout') || msg.includes('aborted')
-            ? 'Tempo esgotado ao gerar o código automatizado (Cursor)'
-            : msg;
-        send('error', { error: friendly, prompt: formatPromptForDownload(prompt, reqImages, targetAuth) });
-        controller.close();
-        return;
+        try {
+          controller.close();
+        } catch {
+          // já fechado
+        }
       }
-      stopHeartbeat();
-
-      send('progress', { phase: 'parsing' });
-
-      let result: ParseRobotProjectResult;
-      try {
-        result = parseRobotProject(cursorOut.text);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Resposta inválida da IA';
-        send('error', { error: msg, prompt: formatPromptForDownload(prompt, reqImages, targetAuth) });
-        controller.close();
-        return;
-      }
-
-      send('result', buildRobotSuccessResponse(prep, cursorOut, result));
-      controller.close();
     },
   });
 
