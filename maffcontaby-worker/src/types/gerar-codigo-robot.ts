@@ -23,6 +23,7 @@ export type GerarCodigoRobotResponse = {
     authSuccess?: boolean;
     authMode?: string;
     authError?: string;
+    automationStack?: 'robot' | 'playwright';
   };
 };
 

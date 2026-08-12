@@ -4,6 +4,7 @@ import { LoginPage } from '@/pages/auth/login';
 import { CompetenciasPage } from '@/pages/cadastro/competencias';
 import { GruposPage } from '@/pages/cadastro/grupos';
 import { PessoasPage } from '@/pages/cadastro/pessoas';
+import { PromptsPage } from '@/pages/cadastro/prompts';
 import { FinancasPage } from '@/pages/financas';
 import { ImportarPage } from '@/pages/importar';
 import { MovimentacoesPage } from '@/pages/movimentacoes';
@@ -36,6 +37,7 @@ export function AppRoutes() {
         <Route path="/cadastro/pessoas" element={<PessoasPage />} />
         <Route path="/cadastro/grupos" element={<GruposPage />} />
         <Route path="/cadastro/competencias" element={<CompetenciasPage />} />
+        <Route path="/cadastro/prompts" element={<PromptsPage />} />
         <Route path="/financas" element={<FinancasPage />} />
         <Route path="/relatorios" element={<RelatoriosPage />} />
         <Route path="/importar" element={<ImportarPage />} />

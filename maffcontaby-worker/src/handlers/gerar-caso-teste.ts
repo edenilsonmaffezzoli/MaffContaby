@@ -4,6 +4,7 @@ import { callCursorForTestCases, type CursorImagePart, type CursorProgressCallba
 import { groupCasesBySubject } from '../group-cases-by-subject';
 import { parseAiQaseCsv } from '../parse-ai-qase-csv';
 import { buildGerarCasoTestePrompt, type PageContextForPrompt } from '../prompts/gerar-caso-teste';
+import { getPromptById } from '../prompts-store';
 import type {
   AiParseResult,
   GerarCasoTesteErrorResponse,
@@ -20,6 +21,7 @@ export type GerarCasoTesteEnv = {
   CURSOR_MODEL?: string;
   CURSOR_MAX_INPUT_CHARS?: string;
   CURSOR_TIMEOUT_SECONDS?: string;
+  MAFF_KV?: KVNamespace;
 };
 
 
@@ -433,6 +435,7 @@ export type PreparedGeneration = {
   files: SourceFileInput[];
   truncated: boolean;
   pageContext: PageContext;
+  automationStack: 'robot' | 'playwright';
 };
 
 type PrepareGenerationResult =
@@ -446,6 +449,7 @@ export type PromptBuilder = (
   truncated: boolean,
   imageCount: number,
   pageContext: PageContextForPrompt,
+  customInstructions?: string,
 ) => string;
 
 /** Valida o request, busca a página (com/sem login) e monta o prompt. Compartilhado pelos handlers. */
@@ -500,7 +504,27 @@ export async function prepareGeneration(
     base64: img.base64.replace(/\s/g, ''),
   }));
 
-  const prompt = promptBuilder(req, files, truncated, cursorImages.length, pageContext);
+  let customInstructions: string | undefined;
+  const promptId = req.promptId?.trim();
+  if (promptId) {
+    if (!env.MAFF_KV) {
+      return { ok: false, response: text('Armazenamento de prompts não configurado', 500) };
+    }
+    const storedPrompt = await getPromptById(env.MAFF_KV, promptId);
+    if (!storedPrompt) {
+      return { ok: false, response: text('Prompt não encontrado', 400) };
+    }
+    customInstructions = storedPrompt.text;
+  }
+
+  const prompt = promptBuilder(
+    req,
+    files,
+    truncated,
+    cursorImages.length,
+    pageContext,
+    promptBuilder === buildGerarCasoTestePrompt ? customInstructions : undefined,
+  );
 
   return {
     ok: true,
@@ -515,6 +539,7 @@ export async function prepareGeneration(
       files,
       truncated,
       pageContext,
+      automationStack: req.automationStack === 'playwright' ? 'playwright' : 'robot',
     },
   };
 }

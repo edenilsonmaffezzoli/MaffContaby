@@ -12,6 +12,7 @@ import {
   type GerarStreamPhase,
 } from '@/services/casos-teste-service';
 import { me } from '@/services/auth-service';
+import { getPrompts } from '@/services/prompts-service';
 import { useHttpClient } from '@/hooks/use-http-client';
 import { useQuery } from '@tanstack/react-query';
 import type {
@@ -135,7 +136,15 @@ export function CasosTesteInteligentesPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const promptsQuery = useQuery({
+    queryKey: ['prompts'],
+    queryFn: () => getPrompts(httpClient),
+    staleTime: 60 * 1000,
+  });
+
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
+  const [selectedPromptId, setSelectedPromptId] = useState('');
+  const [automationStack, setAutomationStack] = useState<'robot' | 'playwright'>('robot');
 
   const [exportSummary, setExportSummary] = useState<QaseCsvExportStats | null>(null);
   const [robotPlanSummary, setRobotPlanSummary] = useState<RobotPlanStats | null>(null);
@@ -222,6 +231,7 @@ export function CasosTesteInteligentesPage() {
           images: images.length ? images : undefined,
           targetAuth,
           model: isAdmin ? selectedModel : undefined,
+          promptId: selectedPromptId.trim() || undefined,
         },
         token,
         {
@@ -275,6 +285,7 @@ export function CasosTesteInteligentesPage() {
           images: images.length ? images : undefined,
           targetAuth,
           model: isAdmin ? selectedModel : undefined,
+          automationStack,
         },
         token,
         {
@@ -299,7 +310,11 @@ export function CasosTesteInteligentesPage() {
   async function handleDownloadRobotZip() {
     if (!robotProject?.files.length) return alert('Não há projeto gerado para baixar. Gere o código novamente.');
     try {
-      const stats = await downloadRobotProjectZip(robotProject.files, systemPath.trim() || undefined);
+      const stats = await downloadRobotProjectZip(
+        robotProject.files,
+        systemPath.trim() || undefined,
+        robotProject.meta.automationStack === 'playwright' ? 'playwright' : 'robot',
+      );
       setRobotZipSummary(stats);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Erro ao gerar o .zip do projeto.');
@@ -431,30 +446,53 @@ export function CasosTesteInteligentesPage() {
             />
           </div>
 
-          {/* Model selector (admin only) */}
-          {isAdmin && (
+          {/* Model + prompt selectors */}
+          <div className={`grid grid-cols-1 gap-4 ${isAdmin ? 'sm:grid-cols-2' : ''}`}>
+            {isAdmin && (
+              <div>
+                <Select
+                  label="Modelo de IA"
+                  value={selectedModel}
+                  onChange={e => setSelectedModel(e.target.value)}
+                  disabled={isGenerating || isGeneratingCode}
+                >
+                  {modelsQuery.data?.models.length ? (
+                    modelsQuery.data.models.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.displayName}
+                      </option>
+                    ))
+                  ) : (
+                    <option value={selectedModel}>{selectedModel}</option>
+                  )}
+                </Select>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Apenas administradores. Os modelos rodam sempre em Max Mode (Cloud Agents).
+                </p>
+              </div>
+            )}
             <div>
               <Select
-                label="Modelo de IA"
-                value={selectedModel}
-                onChange={e => setSelectedModel(e.target.value)}
-                disabled={isGenerating || isGeneratingCode}
+                label="Prompt"
+                value={selectedPromptId}
+                onChange={e => setSelectedPromptId(e.target.value)}
+                disabled={isGenerating || isGeneratingCode || promptsQuery.isLoading}
               >
-                {modelsQuery.data?.models.length ? (
-                  modelsQuery.data.models.map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.displayName}
+                <option value="">Prompt padrão</option>
+                {(promptsQuery.data ?? [])
+                  .slice()
+                  .sort((a, b) => a.description.localeCompare(b.description, 'pt-BR', { sensitivity: 'base' }))
+                  .map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.description}
                     </option>
-                  ))
-                ) : (
-                  <option value={selectedModel}>{selectedModel}</option>
-                )}
+                  ))}
               </Select>
               <p className="text-[11px] text-gray-400 mt-1">
-                Apenas administradores. Os modelos rodam sempre em Max Mode (Cloud Agents).
+                Prompt padrão usa o template atual. Cadastre outros em Cadastro de Prompt.
               </p>
             </div>
-          )}
+          </div>
 
           {/* Auth toggle */}
           <div>
@@ -590,16 +628,29 @@ export function CasosTesteInteligentesPage() {
                 <Sparkles size={18} />
                 {isGenerating ? 'Gerando com IA…' : 'Gerar Casos de Teste'}
               </Button>
-              <Button
-                variant="default"
-                size="lg"
-                loading={isGeneratingCode}
-                disabled={!canGenerate || isGenerating || isGeneratingCode}
-                onClick={handleGenerateCode}
-              >
-                <Code2 size={18} />
-                {isGeneratingCode ? 'Gerando código…' : 'Gerar código auto'}
-              </Button>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="w-[220px]">
+                  <Select
+                    label="Stack"
+                    value={automationStack}
+                    onChange={e => setAutomationStack(e.target.value === 'playwright' ? 'playwright' : 'robot')}
+                    disabled={isGenerating || isGeneratingCode}
+                  >
+                    <option value="robot">Robot + Browser Library</option>
+                    <option value="playwright">Playwright</option>
+                  </Select>
+                </div>
+                <Button
+                  variant="default"
+                  size="lg"
+                  loading={isGeneratingCode}
+                  disabled={!canGenerate || isGenerating || isGeneratingCode}
+                  onClick={handleGenerateCode}
+                >
+                  <Code2 size={18} />
+                  {isGeneratingCode ? 'Gerando código…' : 'Gerar código auto'}
+                </Button>
+              </div>
             </div>
             <p className="text-[11px] text-gray-400">API: {apiBase}</p>
           </div>
@@ -625,7 +676,9 @@ export function CasosTesteInteligentesPage() {
                   {codePhase === 'building-prompt'
                     ? 'Lendo o front-end e montando o prompt…'
                     : codePhase === 'calling-ai'
-                      ? 'Gerando o projeto Robot Framework com a IA…'
+                      ? automationStack === 'playwright'
+                        ? 'Gerando o projeto Playwright com a IA…'
+                        : 'Gerando o projeto Robot Framework com a IA…'
                       : 'Processando os arquivos gerados…'}
                 </span>
                 <span className="text-[11px] text-gray-500">
@@ -658,7 +711,11 @@ export function CasosTesteInteligentesPage() {
                 <div className="flex items-center gap-2 min-w-0">
                   <Bot size={16} className="text-[#006666] shrink-0" />
                   <span className="text-sm font-semibold text-gray-800">
-                    Teste automatizado gerado (Robot Framework + Browser Library)
+                    Teste automatizado gerado (
+                    {robotProject.meta.automationStack === 'playwright'
+                      ? 'Playwright Test'
+                      : 'Robot Framework + Browser Library'}
+                    )
                   </span>
                 </div>
                 <span className="text-[11px] text-gray-500 bg-white border border-gray-200 px-2.5 py-1 rounded-full font-medium">

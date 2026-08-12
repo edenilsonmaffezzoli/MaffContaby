@@ -2,6 +2,7 @@ import type { RobotFile } from '@/types/casos-teste';
 import JSZip from 'jszip';
 
 export const ROBOT_PROJECT_DEFAULT_NAME = 'projeto-testes-robot';
+export const PLAYWRIGHT_PROJECT_DEFAULT_NAME = 'projeto-testes-playwright';
 
 export type RobotZipStats = {
   filesIncluded: number;
@@ -18,14 +19,15 @@ function slugify(value: string): string {
     .slice(0, 60);
 }
 
-function deriveProjectName(systemPath?: string): string {
-  if (!systemPath?.trim()) return ROBOT_PROJECT_DEFAULT_NAME;
+function deriveProjectName(systemPath?: string, stack: 'robot' | 'playwright' = 'robot'): string {
+  const prefix = stack === 'playwright' ? PLAYWRIGHT_PROJECT_DEFAULT_NAME : ROBOT_PROJECT_DEFAULT_NAME;
+  if (!systemPath?.trim()) return prefix;
   try {
     const host = new URL(systemPath.trim()).hostname.replace(/^www\./, '');
     const slug = slugify(host);
-    return slug ? `${ROBOT_PROJECT_DEFAULT_NAME}-${slug}` : ROBOT_PROJECT_DEFAULT_NAME;
+    return slug ? `${prefix}-${slug}` : prefix;
   } catch {
-    return ROBOT_PROJECT_DEFAULT_NAME;
+    return prefix;
   }
 }
 
@@ -41,13 +43,14 @@ function triggerBlobDownload(blob: Blob, filename: string) {
 export async function downloadRobotProjectZip(
   files: RobotFile[],
   systemPath?: string,
+  stack: 'robot' | 'playwright' = 'robot',
 ): Promise<RobotZipStats> {
   const valid = files.filter(f => f.path?.trim() && typeof f.content === 'string');
   if (valid.length === 0) {
     throw new Error('Nenhum arquivo válido para gerar o .zip.');
   }
 
-  const projectName = deriveProjectName(systemPath);
+  const projectName = deriveProjectName(systemPath, stack);
   const zip = new JSZip();
   const root = zip.folder(projectName) ?? zip;
 

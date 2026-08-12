@@ -21,6 +21,11 @@ export type EntryDto = {
   data: string | null;
   conferido: boolean;
 };
+export type PromptDto = {
+  id: string;
+  description: string;
+  text: string;
+};
 
 export type DbSnapshotV1 = {
   version: 1;
@@ -29,6 +34,7 @@ export type DbSnapshotV1 = {
   competencias: CompetenciaDto[];
   assets: AssetDto[];
   entries: EntryDto[];
+  prompts?: PromptDto[];
 };
 
 export function normalizeSnapshotV1(snapshot: DbSnapshotV1 | null | undefined) {
@@ -38,7 +44,10 @@ export function normalizeSnapshotV1(snapshot: DbSnapshotV1 | null | undefined) {
   if (!Array.isArray(snapshot.competencias)) return null;
   if (!Array.isArray(snapshot.assets)) return null;
   if (!Array.isArray(snapshot.entries)) return null;
-  return snapshot;
+  return {
+    ...snapshot,
+    prompts: Array.isArray(snapshot.prompts) ? snapshot.prompts : [],
+  };
 }
 
 type ImportResult = { entriesInserted: number; assetsInserted: number };
@@ -72,7 +81,7 @@ export async function importContabilidadeFile(httpClient: AxiosInstance, file: F
 }
 
 export async function clearDatabase(httpClient: AxiosInstance) {
-  const empty: DbSnapshotV1 = { version: 1, people: [], groups: [], competencias: [], assets: [], entries: [] };
+  const empty: DbSnapshotV1 = { version: 1, people: [], groups: [], competencias: [], assets: [], entries: [], prompts: [] };
   await importContabilidadeSnapshot(httpClient, empty, true);
 }
 

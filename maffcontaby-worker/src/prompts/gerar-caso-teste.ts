@@ -18,6 +18,7 @@ export function buildGerarCasoTestePrompt(
   truncated: boolean,
   imageCount: number,
   pageContext?: PageContextForPrompt,
+  customInstructions?: string,
 ): string {
   const systemPath = request.systemPath?.trim() || '(não informado)';
   const sourceLabel = request.sourcePathLabel?.trim() || '(não informado)';
@@ -60,6 +61,32 @@ Nunca inclua senhas reais nos casos CSV. Use placeholders genéricos (ex.: usuar
       : files
           .map(f => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
           .join('\n\n');
+
+  const executionContext = `## CONTEXTO DESTA EXECUÇÃO (use apenas para análise — não cite detalhes técnicos nos casos)
+
+- Path do sistema (URL, módulo ou rota): ${systemPath}
+- Caminho raiz do código fonte: ${sourceLabel}
+- Arquivos de código incluídos: ${files.length}${truncated ? ' (lista truncada por limite de tamanho)' : ''}
+- Imagens anexadas (prints/diagramas): ${imageCount}
+${pageContext?.fetched ? `- Conteúdo da página (URL) incluído abaixo${pageContext.truncated ? ' (truncado)' : ''}` : pageContext?.fetchError ? `- Aviso: não foi possível buscar a URL (${pageContext.fetchError})` : ''}
+${authContextLines.length ? authContextLines.join('\n') : ''}
+${extra ? `\n- Notas adicionais do usuário:\n${extra}` : ''}
+
+${pageContext?.fetched && pageContext.content ? `## Conteúdo observado na página (referência de negócio)\n${pageContext.content}\n\n` : ''}## Código fonte (referência de negócio — não citar tecnicamente nos casos)
+${codeBlock}
+
+---
+
+Lembrete final: a primeira linha da resposta deve ser exatamente o cabeçalho ${AI_QASE_CSV_HEADER}. Retorne somente o CSV, sem nenhum texto antes ou depois.`;
+
+  const trimmedCustom = customInstructions?.trim();
+  if (trimmedCustom) {
+    return `${trimmedCustom}
+
+---
+
+${executionContext}`;
+  }
 
   return `PAPEL
 Você é um(a) QA Funcional Sênior com vasta experiência em testes manuais e exploratórios de sistemas web corporativos (ERPs, e-commerces, dashboards administrativos, landing pages e sistemas SaaS). Você escreve casos de teste claros, objetivos e observáveis pelo usuário final, sem jargão técnico, prontos para serem executados por qualquer pessoa do time de qualidade — inclusive sem conhecimento do código.
@@ -197,20 +224,5 @@ VALIDAÇÕES FINAIS ANTES DE RESPONDER
 
 ---
 
-## CONTEXTO DESTA EXECUÇÃO (use apenas para análise — não cite detalhes técnicos nos casos)
-
-- Path do sistema (URL, módulo ou rota): ${systemPath}
-- Caminho raiz do código fonte: ${sourceLabel}
-- Arquivos de código incluídos: ${files.length}${truncated ? ' (lista truncada por limite de tamanho)' : ''}
-- Imagens anexadas (prints/diagramas): ${imageCount}
-${pageContext?.fetched ? `- Conteúdo da página (URL) incluído abaixo${pageContext.truncated ? ' (truncado)' : ''}` : pageContext?.fetchError ? `- Aviso: não foi possível buscar a URL (${pageContext.fetchError})` : ''}
-${authContextLines.length ? authContextLines.join('\n') : ''}
-${extra ? `\n- Notas adicionais do usuário:\n${extra}` : ''}
-
-${pageContext?.fetched && pageContext.content ? `## Conteúdo observado na página (referência de negócio)\n${pageContext.content}\n\n` : ''}## Código fonte (referência de negócio — não citar tecnicamente nos casos)
-${codeBlock}
-
----
-
-Lembrete final: a primeira linha da resposta deve ser exatamente o cabeçalho ${AI_QASE_CSV_HEADER}. Retorne somente o CSV, sem nenhum texto antes ou depois.`;
+${executionContext}`;
 }
