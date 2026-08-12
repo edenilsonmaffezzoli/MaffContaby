@@ -649,66 +649,62 @@ export async function handleGerarCasoTesteStream(request: Request, env: GerarCas
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (event: string, data: unknown) => {
-        try {
-          controller.enqueue(sseEncode(event, data));
-        } catch {
-          // controller já fechado
-        }
+        controller.enqueue(sseEncode(event, data));
       };
-
-      send('progress', {
-        phase: pageContext.fetched ? 'building-prompt' : 'calling-ai',
-        urlContentFetched: pageContext.fetched,
-        urlFetchError: pageContext.fetchError,
-      });
-
-      const onProgress: CursorProgressCallback = ev => {
-        if (ev.type === 'status') send('status', { status: ev.status });
-        else send('delta', { chars: ev.chars });
-      };
-
-      send('progress', { phase: 'calling-ai' });
 
       const stopHeartbeat = startSseHeartbeat(controller);
-      let cursorOut: Awaited<ReturnType<typeof callCursorForTestCases>>;
       try {
-        cursorOut = await callCursorForTestCases(config, prompt, cursorImages, onProgress);
+        send('progress', {
+          phase: pageContext.fetched ? 'building-prompt' : 'calling-ai',
+          urlContentFetched: pageContext.fetched,
+          urlFetchError: pageContext.fetchError,
+        });
+
+        const onProgress: CursorProgressCallback = ev => {
+          try {
+            if (ev.type === 'status') send('status', { status: ev.status });
+            else send('delta', { chars: ev.chars });
+          } catch {
+            // progresso não pode derrubar o stream
+          }
+        };
+
+        send('progress', { phase: 'calling-ai' });
+
+        const cursorOut = await callCursorForTestCases(config, prompt, cursorImages, onProgress);
+
+        send('progress', { phase: 'parsing' });
+
+        const result = parseAiResult(cursorOut.text);
+
+        if (result.cases.length === 0) {
+          send('error', {
+            error: 'A IA não retornou casos de teste válidos',
+            prompt: formatPromptForDownload(prompt, reqImages, targetAuth),
+          });
+          return;
+        }
+
+        send('result', buildSuccessResponse(prep, cursorOut, result));
       } catch (err) {
-        stopHeartbeat();
         const msg = err instanceof Error ? err.message : 'Erro ao chamar Cursor';
         const friendly =
           msg.includes('Timeout') || msg.includes('timeout') || msg.includes('aborted')
             ? 'Tempo esgotado ao gerar casos de teste (Cursor)'
             : msg;
-        send('error', { error: friendly, prompt: formatPromptForDownload(prompt, reqImages, targetAuth) });
-        controller.close();
-        return;
+        try {
+          send('error', { error: friendly, prompt: formatPromptForDownload(prompt, reqImages, targetAuth) });
+        } catch {
+          // canal já fechado
+        }
+      } finally {
+        stopHeartbeat();
+        try {
+          controller.close();
+        } catch {
+          // já fechado
+        }
       }
-      stopHeartbeat();
-
-      send('progress', { phase: 'parsing' });
-
-      let result: ParseAiResult;
-      try {
-        result = parseAiResult(cursorOut.text);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Resposta inválida da IA';
-        send('error', { error: msg, prompt: formatPromptForDownload(prompt, reqImages, targetAuth) });
-        controller.close();
-        return;
-      }
-
-      if (result.cases.length === 0) {
-        send('error', {
-          error: 'A IA não retornou casos de teste válidos',
-          prompt: formatPromptForDownload(prompt, reqImages, targetAuth),
-        });
-        controller.close();
-        return;
-      }
-
-      send('result', buildSuccessResponse(prep, cursorOut, result));
-      controller.close();
     },
   });
 

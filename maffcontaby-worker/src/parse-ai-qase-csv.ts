@@ -56,6 +56,8 @@ function stripCsvFence(raw: string): string {
   if (s.startsWith('```')) {
     s = s.replace(/^```(?:csv)?\s*/i, '').replace(/\s*```$/i, '').trim();
   }
+  const headerIdx = s.search(/^Suite\s*,\s*Subsuite\s*,\s*Title/im);
+  if (headerIdx > 0) return s.slice(headerIdx).trim();
   return s;
 }
 
